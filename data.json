@@ -1,0 +1,42 @@
+﻿{
+  "hero": {
+    "badge": "Ręcznie wykonane laserem diodowym",
+    "titleLine1": "Sztuka drewna",
+    "titleLine2": "cięta",
+    "titleHighlight": "światłem",
+    "description": "Precyzyjne wycinanie i grawerowanie laserem diodowym w sklejce i HDF. Tworzymy unikalne dekoracje, napisy i ozdoby — od projektu do gotowego wyrobu.",
+    "stats": [
+      {"value": "100+", "label": "Realizacji"},
+      {"value": "4", "label": "Materiały"},
+      {"value": "0,1mm", "label": "Precyzja cięcia"}
+    ]
+  },
+  "contact": {
+    "email": "xeomsc@gmail.com",
+    "responseTime": "Do 24 godzin w dni robocze",
+    "realizationTime": "2-5 dni roboczych od akceptacji projektu",
+    "delivery": "Kurier, Paczkomat lub odbiór osobisty"
+  },
+  "products": [
+    {"id": "p1", "icon": "🌸", "badge": "Bestseller", "category": "Dekoracje ścienne", "name": "Mandala — Dekoracja ścienna", "description": "Precyzyjnie wycięta mandala ze sklejki. Rozmiary 20–60 cm. Możliwość wyboru wzoru lub wykonania na zamówienie.", "tags": ["Sklejka 3mm", "Ø 20–60 cm", "Personalizacja"], "priceLabel": "Orientacyjna cena od", "price": "35 zł", "priceFrom": ""},
+    {"id": "p2", "icon": "✍️", "badge": "", "category": "Napisy i litery", "name": "Ozdobny napis personalizowany", "description": "Imię, data, cytat lub dowolny tekst w ozdobnej czcionce. Idealny prezent na urodziny lub rocznicę.", "tags": ["Sklejka 4mm", "Do 50 cm dł.", "Własny tekst"], "priceLabel": "Orientacyjna cena od", "price": "25 zł", "priceFrom": ""},
+    {"id": "p3", "icon": "🎄", "badge": "Sezonowe", "category": "Ozdoby świąteczne", "name": "Zestaw ozdób bożonarodzeniowych", "description": "Ażurowe bombki, śnieżynki, renifery, gwiazdki. Sprzedawane w zestawach lub pojedynczo. Możliwość grawerowania imion.", "tags": ["HDF 3mm", "5–20 szt.", "Z grawerem"], "priceLabel": "Orientacyjna cena od", "price": "40 zł", "priceFrom": "za zestaw 5 szt."},
+    {"id": "p4", "icon": "🖼️", "badge": "", "category": "Ramki i tabliczki", "name": "Ramka na zdjęcie z dedykacją", "description": "Elegancka ramka z wygrawerowanym napisem lub datą. Formaty A5, A4 i A3. Idealny prezent.", "tags": ["Sklejka 4mm", "A5 / A4 / A3", "Grawer"], "priceLabel": "Orientacyjna cena od", "price": "45 zł", "priceFrom": ""},
+    {"id": "p5", "icon": "🕐", "badge": "", "category": "Zegarki ścienne", "name": "Zegar ścienny — drewniany design", "description": "Oryginalny zegar z laserowo wyciętą tarczą. Mechanizm kwarcowy w zestawie. Różne rozmiary i wzory.", "tags": ["Sklejka 5mm", "Ø 25–50 cm", "Mechanizm w zestawie"], "priceLabel": "Orientacyjna cena od", "price": "75 zł", "priceFrom": ""},
+    {"id": "p6", "icon": "🏷️", "badge": "", "category": "Szyldy i tabliczki", "name": "Szyld lub tabliczka firmowa", "description": "Profesjonalne szyldy dla firm i biur lub personalizowane tabliczki domowe. Projekt graficzny w cenie. Od 1 szt.", "tags": ["Sklejka 5mm / HDF", "Własny projekt", "Od 1 szt."], "priceLabel": "Wycena indywidualna", "price": "od 60 zł", "priceFrom": ""}
+  ],
+  "gallery": [
+    {"id": "g1", "icon": "🌸", "title": "Mandala — Dekoracja ścienna", "description": "Precyzyjnie wycięta mandala ze sklejki 3mm. Rozmiary 20-60 cm.", "material": "Sklejka 3mm", "category": "dekoracje", "label": "Mandala ścienna"},
+    {"id": "g2", "icon": "✍️", "title": "Napis — Rodzina", "description": "Ozdobny napis ze sklejki 4mm. Personalizacja imion i dat.", "material": "Sklejka 4mm", "category": "napisy", "label": "Napis Rodzina"},
+    {"id": "g3", "icon": "🎄", "title": "Ażurowa bombka", "description": "Bombka choinkowa z HDF 3mm. Różne wzory.", "material": "HDF 3mm", "category": "swieta", "label": "Bombka ażurowa"},
+    {"id": "g4", "icon": "🚪", "title": "Tabliczka na drzwi", "description": "Personalizowana tabliczka z imieniem lub numerem.", "material": "Sklejka 5mm", "category": "personalizowane", "label": "Tabliczka na drzwi"},
+    {"id": "g5", "icon": "🌙", "title": "Łapacz snów", "description": "Geometryczny łapacz snów z precyzyjnym wzorem.", "material": "Sklejka 3mm", "category": "ozdoby", "label": "Łapacz snów"},
+    {"id": "g6", "icon": "🗺️", "title": "Mapa Polski", "description": "Mapa Polski ze sklejki 4mm z wyciętymi województwami.", "material": "Sklejka 4mm", "category": "dekoracje", "label": "Mapa Polski"},
+    {"id": "g7", "icon": "🏡", "title": "Napis Welcome", "description": "Elegancki napis powitalny.", "material": "HDF 3mm", "category": "napisy", "label": "Napis Welcome"},
+    {"id": "g8", "icon": "🦌", "title": "Renifer świąteczny", "description": "Zestaw ozdób świątecznych.", "material": "Sklejka 3mm", "category": "swieta", "label": "Renifer świąteczny"},
+    {"id": "g9", "icon": "🖼️", "title": "Ramka na zdjęcie", "description": "Ramka z wygrawerowanym napisem lub datą.", "material": "Sklejka 4mm", "category": "personalizowane", "label": "Ramka z grawerem"},
+    {"id": "g10", "icon": "💎", "title": "Geometria 3D", "description": "Trójwymiarowa dekoracja geometryczna.", "material": "HDF 3mm", "category": "ozdoby", "label": "Geometria 3D"},
+    {"id": "g11", "icon": "🕐", "title": "Zegar ścienny", "description": "Zegar z laserowo wyciętą tarczą. Mechanizm w zestawie.", "material": "Sklejka 5mm", "category": "dekoracje", "label": "Zegar ścienny"},
+    {"id": "g12", "icon": "🍽️", "title": "Deska kuchenna z grawerem", "description": "Deska z wygrawerowanym logo lub dedykacją.", "material": "Sklejka 5mm", "category": "personalizowane", "label": "Deska z grawerem"}
+  ]
+}

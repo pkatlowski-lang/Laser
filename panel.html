@@ -1,0 +1,587 @@
+﻿<!DOCTYPE html><html lang="pl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Panel administratora &mdash; LaserArt</title><meta name="robots" content="noindex, nofollow"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"><style>*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}:root{--bg:#0F0A06;--surface:#1C1208;--surface2:#261A0C;--border:#3D2A14;--wood-dark:#8B5E2A;--wood:#C8943A;--wood-light:#E8C87A;--cream:#F5EDD8;--text:#EDE0C8;--muted:#A08060;--white:#FAF7F2;--red:#e05c5c;--green:#5cbf80;--blue:#5c9fbf;--font-b:'Inter',system-ui,sans-serif;--r:8px;--tr:.2s ease}html,body{height:100%}body{background:var(--bg);color:var(--text);font-family:var(--font-b);font-size:14px;line-height:1.5}a{color:var(--wood);text-decoration:none}a:hover{color:var(--wood-light)}h1,h2,h3,h4{color:var(--cream)}.btn{display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border:none;border-radius:var(--r);font-family:var(--font-b);font-size:.85rem;font-weight:600;cursor:pointer;transition:var(--tr);text-decoration:none;white-space:nowrap}.btn:disabled{opacity:.5;cursor:not-allowed}.btn-pri{background:linear-gradient(135deg,var(--wood),var(--wood-dark));color:var(--white)}.btn-pri:hover:not(:disabled){background:linear-gradient(135deg,var(--wood-light),var(--wood));transform:translateY(-1px)}.btn-out{background:transparent;color:var(--wood);border:1.5px solid var(--wood)}.btn-out:hover:not(:disabled){background:var(--wood);color:var(--bg)}.btn-danger{background:transparent;color:var(--red);border:1.5px solid var(--red)}.btn-danger:hover:not(:disabled){background:var(--red);color:white}.btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}.btn-ghost:hover:not(:disabled){border-color:var(--wood);color:var(--cream)}.btn-sm{padding:6px 12px;font-size:.78rem}.btn-block{width:100%;justify-content:center}.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:radial-gradient(ellipse at center,rgba(200,148,58,.08) 0%,transparent 60%)}.login-card{width:100%;max-width:420px;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:40px;box-shadow:0 20px 60px rgba(0,0,0,.5)}.login-logo{text-align:center;margin-bottom:32px}.login-logo .name{font-size:1.6rem;font-weight:700;color:var(--cream)}.login-logo .sub{font-size:.7rem;font-weight:600;letter-spacing:.2em;text-transform:uppercase;color:var(--wood);margin-top:4px}.login-card h2{font-size:1.2rem;margin-bottom:6px;text-align:center}.login-card .login-sub{font-size:.82rem;color:var(--muted);text-align:center;margin-bottom:26px}.form-grp{margin-bottom:16px}.form-lbl{display:block;font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}.form-ctrl{width:100%;padding:11px 14px;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--r);color:var(--cream);font-family:var(--font-b);font-size:.9rem;transition:var(--tr);outline:none;resize:vertical;font-family:inherit}.form-ctrl::placeholder{color:var(--muted);opacity:.5}.form-ctrl:focus{border-color:var(--wood);box-shadow:0 0 0 3px rgba(200,148,58,.15)}textarea.form-ctrl{min-height:80px}.form-hint{font-size:.72rem;color:var(--muted);margin-top:6px;line-height:1.5}.form-err{color:var(--red);font-size:.78rem;margin-top:6px;display:none}.form-err.show{display:block}.login-help{font-size:.72rem;color:var(--muted);text-align:center;margin-top:16px;line-height:1.5}.layout{min-height:100vh;display:grid;grid-template-columns:240px 1fr}.sidebar{background:var(--surface);border-right:1px solid var(--border);padding:24px 0;display:flex;flex-direction:column;position:sticky;top:0;height:100vh}.side-logo{padding:0 24px 24px;border-bottom:1px solid var(--border);margin-bottom:16px}.side-logo .name{font-size:1.2rem;font-weight:700;color:var(--cream)}.side-logo .sub{font-size:.62rem;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--wood);margin-top:2px}.side-nav{flex:1;display:flex;flex-direction:column;padding:0 12px;overflow-y:auto}.side-nav button{display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;margin-bottom:2px;background:transparent;border:none;border-radius:var(--r);color:var(--muted);font-family:var(--font-b);font-size:.88rem;font-weight:500;cursor:pointer;transition:var(--tr);text-align:left}.side-nav button:hover{background:var(--surface2);color:var(--cream)}.side-nav button.active{background:rgba(200,148,58,.12);color:var(--wood-light)}.side-nav .ico{font-size:1.1rem;width:22px;text-align:center}.side-foot{padding:16px 24px;border-top:1px solid var(--border);font-size:.72rem;color:var(--muted)}.side-foot a{display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:6px 0}.side-foot a:last-child{margin-bottom:0}.gh-badge{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:100px;font-size:.65rem;font-weight:600;letter-spacing:.05em;margin-bottom:8px}.gh-badge.on{background:rgba(92,191,128,.15);color:var(--green);border:1px solid rgba(92,191,128,.3)}.gh-badge.off{background:rgba(224,92,92,.1);color:var(--red);border:1px solid rgba(224,92,92,.25)}.gh-badge::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}.main{padding:32px 40px;overflow-y:auto;min-height:100vh}.page-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:28px;padding-bottom:20px;border-bottom:1px solid var(--border);flex-wrap:wrap}.page-head h1{font-size:1.5rem;font-weight:700}.page-head .sub{font-size:.82rem;color:var(--muted);margin-top:4px}.page-actions{display:flex;gap:10px;flex-wrap:wrap}.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:24px;margin-bottom:20px}.card h3{font-size:1rem;margin-bottom:4px}.card .desc{font-size:.8rem;color:var(--muted);margin-bottom:18px}.card .stat-big{font-size:2rem;font-weight:700;color:var(--wood);margin:0;line-height:1.1}.row{display:grid;gap:14px;grid-template-columns:1fr 1fr}.row-3{grid-template-columns:1fr 1fr 1fr}.list-item{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:12px;transition:var(--tr)}.list-item:hover{border-color:var(--wood-dark)}.list-hd{display:flex;align-items:center;justify-content:space-between;gap:12px}.list-hd-info{display:flex;align-items:center;gap:12px;flex:1;min-width:0;cursor:pointer}.list-hd-ico{font-size:1.6rem;flex-shrink:0;width:38px;text-align:center}.list-hd-txt{min-width:0;flex:1}.list-hd-name{font-size:.92rem;color:var(--cream);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.list-hd-sub{font-size:.72rem;color:var(--muted);margin-top:2px}.list-hd-actions{display:flex;gap:6px;flex-shrink:0;align-items:center}.list-toggle{background:transparent;border:1px solid var(--border);width:30px;height:30px;border-radius:50%;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:var(--tr);font-size:.7rem}.list-toggle:hover{border-color:var(--wood);color:var(--wood)}.list-item.open .list-toggle{transform:rotate(180deg)}.list-body{display:none;padding-top:18px;margin-top:14px;border-top:1px dashed var(--border)}.list-item.open .list-body{display:block}.empty{padding:36px;text-align:center;color:var(--muted);font-size:.85rem;background:var(--surface2);border-radius:var(--r);border:1px dashed var(--border)}.toast{position:fixed;bottom:24px;right:24px;z-index:1000;padding:14px 22px;background:var(--surface2);border:1px solid var(--wood);border-radius:var(--r);color:var(--cream);font-size:.85rem;box-shadow:0 8px 32px rgba(0,0,0,.4);opacity:0;transform:translateY(20px);transition:all .3s ease;max-width:380px;line-height:1.5}.toast.show{opacity:1;transform:none}.toast.err{border-color:var(--red);background:rgba(224,92,92,.08)}.toast.ok{border-color:var(--green);background:rgba(92,191,128,.06)}.help-box{background:rgba(200,148,58,.06);border:1px solid rgba(200,148,58,.18);border-radius:var(--r);padding:14px 16px;font-size:.8rem;color:var(--muted);line-height:1.6;margin-bottom:18px}.help-box strong{color:var(--wood-light)}.help-box code{background:var(--surface2);padding:2px 6px;border-radius:4px;color:var(--cream);font-size:.85em}.help-box ol,.help-box ul{margin-top:8px;padding-left:22px}.help-box li{margin-bottom:4px}.tag-input{display:flex;gap:8px}.tag-input input{flex:1}.tag-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.tag-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;background:rgba(200,148,58,.1);border:1px solid rgba(200,148,58,.25);border-radius:100px;font-size:.78rem;color:var(--wood-light)}.tag-pill button{background:none;border:none;color:var(--wood-light);cursor:pointer;font-size:1rem;padding:0;line-height:1;opacity:.6}.tag-pill button:hover{opacity:1;color:var(--red)}.diff-info{background:var(--surface2);border-radius:var(--r);padding:14px 16px;font-size:.8rem;font-family:monospace;color:var(--muted);margin-bottom:14px;overflow-x:auto}.tab-content{display:none}.tab-content.active{display:block}.hidden{display:none !important}.spinner{display:inline-block;width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}.publish-btn{padding:14px 24px;font-size:.95rem}.code-block{background:#0a0604;border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;font-family:monospace;font-size:.78rem;color:var(--wood-light);overflow-x:auto;white-space:pre;line-height:1.5}@media(max-width:768px){.layout{grid-template-columns:1fr}.sidebar{position:relative;top:auto;height:auto;padding:14px 0;border-right:none;border-bottom:1px solid var(--border)}.side-nav{flex-direction:row;overflow-x:auto;padding:0 12px}.side-nav button{flex-shrink:0;margin-right:6px;margin-bottom:0;white-space:nowrap}.side-foot{display:none}.side-logo{padding:0 16px 14px}.main{padding:20px 16px}.row,.row-3{grid-template-columns:1fr}}</style></head><body><div id="loginScreen" class="login-wrap"><div class="login-card"><div class="login-logo"><div class="name">LaserArt</div><div class="sub">Panel administratora</div></div><h2>Logowanie</h2><p class="login-sub">Wprowad&#x17a; has&#x142;o, aby uzyska&#x107; dost&#x119;p do panelu</p><form id="loginForm" novalidate><div class="form-grp"><label class="form-lbl" for="pass">Has&#x142;o</label><input type="password" id="pass" class="form-ctrl" placeholder="Wprowad&#x17a; has&#x142;o..." autocomplete="current-password" required></div><div class="form-err" id="loginErr">Nieprawid&#x142;owe has&#x142;o.</div><button type="submit" class="btn btn-pri btn-block">Zaloguj si&#x119;</button></form><p class="login-help">Domy&#x15b;lne has&#x142;o: <strong style="color:var(--wood-light)">laser2025</strong><br>Mo&#x17c;esz je zmieni&#x107; po zalogowaniu.</p></div></div><div id="adminPanel" class="layout hidden"><aside class="sidebar"><div class="side-logo"><div class="name">LaserArt</div><div class="sub">Panel administratora</div></div><nav class="side-nav"><button data-tab="dashboard" class="active"><span class="ico">&#x1F4CA;</span><span>Pulpit</span></button><button data-tab="hero"><span class="ico">&#x1F3AF;</span><span>Sekcja Hero</span></button><button data-tab="products"><span class="ico">&#x1F4E6;</span><span>Produkty</span></button><button data-tab="gallery"><span class="ico">&#x1F5BC;&#xFE0F;</span><span>Galeria</span></button><button data-tab="contact"><span class="ico">&#x2709;&#xFE0F;</span><span>Kontakt</span></button><button data-tab="publish"><span class="ico">&#x1F680;</span><span>Publikuj na GitHub</span></button><button data-tab="settings"><span class="ico">&#x2699;&#xFE0F;</span><span>Ustawienia</span></button></nav><div class="side-foot"><span id="ghStatus" class="gh-badge off">GitHub: niepo&#x142;&#x105;czony</span><a href="index.html" target="_blank">&#x1F517; Otw&#xf3;rz stron&#x119;</a><a href="#" id="logoutBtn">&#x1F511; Wyloguj si&#x119;</a></div></aside><main class="main"><section class="tab-content active" data-tab="dashboard"><div class="page-head"><div><h1>Witaj w panelu</h1><div class="sub">Pulpit administratora &mdash; szybki przegl&#x105;d</div></div></div><div class="help-box">&#x1F44B; <strong>Jak to dzia&#x142;a:</strong> Wszystkie edytowalne tre&#x15b;ci strony s&#x105; przechowywane w pliku <code>data.json</code> w Twoim repo na GitHub. Edytujesz w panelu &rarr; klikasz <strong>Publikuj na GitHub</strong> &rarr; zmiany s&#x105; widoczne dla wszystkich odwiedzaj&#x105;cych w ci&#x105;gu minuty.<br><br>Pierwsza rzecz do zrobienia: skonfiguruj po&#x142;&#x105;czenie z GitHub w zak&#x142;adce <strong>Ustawienia</strong>.</div><div class="row row-3"><div class="card"><div class="stat-big" id="statProducts">0</div><div class="desc">Produkt&#xf3;w w katalogu</div></div><div class="card"><div class="stat-big" id="statGallery">0</div><div class="desc">Realizacji w galerii</div></div><div class="card"><div class="stat-big" id="statChanges" style="font-size:1rem;line-height:1.4">brak</div><div class="desc">Niezapisane zmiany</div></div></div><div class="card"><h3>Szybkie akcje</h3><div class="desc">Najcz&#x119;stsze operacje</div><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn btn-pri" onclick="switchTab('products')">+ Dodaj produkt</button><button class="btn btn-pri" onclick="switchTab('gallery')">+ Dodaj realizacj&#x119;</button><button class="btn btn-out" onclick="switchTab('publish')">&#x1F680; Publikuj zmiany</button><a href="index.html" target="_blank" class="btn btn-ghost">&#x1F441; Podgl&#x105;d strony</a></div></div></section><section class="tab-content" data-tab="hero"><div class="page-head"><div><h1>Sekcja Hero</h1><div class="sub">Edycja g&#x142;&#xf3;wnego baneru</div></div><div class="page-actions"><button class="btn btn-pri" id="heroSave">&#x1F4BE; Zapisz lokalnie</button></div></div><div class="help-box">&#x1F4A1; <strong>Zapisz lokalnie</strong> zapisuje zmian&#x119; tymczasowo w przegl&#x105;darce. Aby opublikowa&#x107; j&#x105; dla wszystkich, przejd&#x17a; do zak&#x142;adki <strong>Publikuj na GitHub</strong>.</div><div class="card"><h3>Tre&#x15b;&#x107; baneru</h3><div class="desc">Widoczne na samej g&#xf3;rze strony</div><div class="form-grp"><label class="form-lbl" for="hBadge">Etykieta nad nag&#x142;&#xf3;wkiem</label><input type="text" id="hBadge" class="form-ctrl" placeholder="np. R&#x119;cznie wykonane laserem diodowym"></div><div class="row"><div class="form-grp"><label class="form-lbl" for="hTitle1">Nag&#x142;&#xf3;wek &mdash; linia 1</label><input type="text" id="hTitle1" class="form-ctrl" placeholder="np. Sztuka drewna"></div><div class="form-grp"><label class="form-lbl" for="hTitle2">Linia 2 (przed wyr&#xf3;&#x17c;nieniem)</label><input type="text" id="hTitle2" class="form-ctrl" placeholder="np. ci&#x119;ta"></div></div><div class="form-grp"><label class="form-lbl" for="hHigh">Wyr&#xf3;&#x17c;nione s&#x142;owo (z&#x142;oty gradient)</label><input type="text" id="hHigh" class="form-ctrl" placeholder="np. &#x15b;wiat&#x142;em"></div><div class="form-grp"><label class="form-lbl" for="hDesc">Opis pod nag&#x142;&#xf3;wkiem</label><textarea id="hDesc" class="form-ctrl" rows="3" placeholder="Kr&#xf3;tki opis pracowni..."></textarea></div></div><div class="card"><h3>Statystyki</h3><div class="desc">Trzy liczby pod opisem</div><div class="row row-3"><div><div class="form-grp"><label class="form-lbl">Liczba 1</label><input type="text" id="hS1v" class="form-ctrl" placeholder="100+"></div><div class="form-grp"><label class="form-lbl">Opis 1</label><input type="text" id="hS1l" class="form-ctrl" placeholder="Realizacji"></div></div><div><div class="form-grp"><label class="form-lbl">Liczba 2</label><input type="text" id="hS2v" class="form-ctrl" placeholder="4"></div><div class="form-grp"><label class="form-lbl">Opis 2</label><input type="text" id="hS2l" class="form-ctrl" placeholder="Materia&#x142;y"></div></div><div><div class="form-grp"><label class="form-lbl">Liczba 3</label><input type="text" id="hS3v" class="form-ctrl" placeholder="0,1mm"></div><div class="form-grp"><label class="form-lbl">Opis 3</label><input type="text" id="hS3l" class="form-ctrl" placeholder="Precyzja ci&#x119;cia"></div></div></div></div></section><section class="tab-content" data-tab="products"><div class="page-head"><div><h1>Produkty</h1><div class="sub">Edycja katalogu produkt&#xf3;w</div></div><div class="page-actions"><button class="btn btn-pri" id="addProduct">+ Dodaj produkt</button></div></div><div class="help-box">&#x1F4A1; Kliknij na produkt aby go rozwin&#x105;&#x107; i edytowa&#x107;. Pami&#x119;taj o klikni&#x119;ciu <strong>Zapisz</strong> po edycji ka&#x17c;dego elementu, a nast&#x119;pnie <strong>Publikuj na GitHub</strong>.</div><div id="productList"></div></section><section class="tab-content" data-tab="gallery"><div class="page-head"><div><h1>Galeria realizacji</h1><div class="sub">Kafelki w sekcji Portfolio</div></div><div class="page-actions"><button class="btn btn-pri" id="addGallery">+ Dodaj realizacj&#x119;</button></div></div><div class="help-box">&#x1F4A1; Pola <strong>Tytu&#x142;</strong> i <strong>Opis</strong> wy&#x15b;wietlaj&#x105; si&#x119; w okienku po klikni&#x119;ciu kafelka. <strong>Etykieta</strong> jest widoczna na overlayu po najechaniu mysz&#x105;.<br>Dost&#x119;pne kategorie: <code>dekoracje</code>, <code>napisy</code>, <code>ozdoby</code>, <code>swieta</code>, <code>personalizowane</code></div><div id="galleryList"></div></section><section class="tab-content" data-tab="contact"><div class="page-head"><div><h1>Dane kontaktowe</h1><div class="sub">Informacje w sekcji "Kontakt"</div></div><div class="page-actions"><button class="btn btn-pri" id="contactSave">&#x1F4BE; Zapisz lokalnie</button></div></div><div class="card"><h3>Kontakt</h3><div class="desc">Te dane pojawiaj&#x105; si&#x119; w sekcji Kontakt oraz w stopce</div><div class="form-grp"><label class="form-lbl" for="cEmail">Adres e-mail</label><input type="email" id="cEmail" class="form-ctrl" placeholder="kontakt@example.com"><div class="form-hint">Wykorzystywany jako adres odbiorcy w formularzu kontaktowym (mailto)</div></div><div class="row"><div class="form-grp"><label class="form-lbl" for="cResp">Czas odpowiedzi</label><input type="text" id="cResp" class="form-ctrl" placeholder="np. Do 24 godzin w dni robocze"></div><div class="form-grp"><label class="form-lbl" for="cReal">Czas realizacji</label><input type="text" id="cReal" class="form-ctrl" placeholder="np. 2-5 dni roboczych"></div></div><div class="form-grp"><label class="form-lbl" for="cDel">Dostawa</label><input type="text" id="cDel" class="form-ctrl" placeholder="np. Kurier, Paczkomat lub odbi&#xf3;r osobisty"></div></div></section><section class="tab-content" data-tab="publish"><div class="page-head"><div><h1>Publikuj na GitHub</h1><div class="sub">Wy&#x15b;lij zmiany do repo &mdash; widoczne dla wszystkich</div></div></div><div class="help-box">&#x1F680; <strong>Co si&#x119; stanie po klikni&#x119;ciu "Publikuj":</strong><ol><li>Panel po&#x142;&#x105;czy si&#x119; z GitHub API i zaktualizuje plik <code>data.json</code> w Twoim repo</li><li>Po 30-60 sekundach GitHub Pages odbuduje stron&#x119; z nowymi tre&#x15b;ciami</li><li>Wszyscy odwiedzaj&#x105;cy zobacz&#x105; zmiany przy nast&#x119;pnym za&#x142;adowaniu strony</li></ol><br>Je&#x15b;li nie skonfigurowa&#x142;e&#x15b; po&#x142;&#x105;czenia, przejd&#x17a; najpierw do <strong>Ustawie&#x144;</strong>.</div><div id="publishCard" class="card"><h3>Status zmian</h3><div class="desc">Stan po&#x142;&#x105;czenia z repozytorium GitHub</div><div id="publishStatus" class="diff-info">&#x231B; Sprawdzanie...</div><button class="btn btn-pri publish-btn" id="publishBtn" disabled><span>&#x1F680;</span><span>Publikuj zmiany na GitHub</span></button><p class="form-hint" style="margin-top:14px">Po opublikowaniu odwied&#x17a; <a id="liveSiteLink" href="#" target="_blank">sw&#xf3;j live site</a> (mo&#x17c;e wymaga&#x107; od&#x15b;wie&#x17c;enia z Ctrl+F5)</p></div><div class="card"><h3>Eksport &amp; Backup</h3><div class="desc">Pobierz lub wczytaj plik konfiguracji</div><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn btn-out" id="exportJson">&#x2B07;&#xFE0F; Pobierz data.json</button><button class="btn btn-out" id="importJsonBtn">&#x2B06;&#xFE0F; Wczytaj kopi&#x119; zapasow&#x105;</button><input type="file" id="importJsonFile" accept="application/json" class="hidden"><button class="btn btn-danger" id="resetAll">&#x1F5D1;&#xFE0F; Przywr&#xf3;&#x107; domy&#x15b;lne</button></div><p class="form-hint" style="margin-top:14px"><strong>Tip:</strong> Po pierwszym wgraniu strony do GitHuba mo&#x17c;esz pobra&#x107; pocz&#x105;tkowy <code>data.json</code> tutaj, a nast&#x119;pnie wrzuci&#x107; go r&#x119;cznie do repo.</p></div></section><section class="tab-content" data-tab="settings"><div class="page-head"><div><h1>Ustawienia</h1><div class="sub">Konfiguracja po&#x142;&#x105;czenia z GitHub i has&#x142;a</div></div></div><div class="card"><h3>&#x1F517; Po&#x142;&#x105;czenie z GitHub</h3><div class="desc">Wype&#x142;nij dane swojego repozytorium aby panel m&#xf3;g&#x142; publikowa&#x107; zmiany</div><div class="help-box" style="margin-bottom:18px"><strong>Jak wygenerowa&#x107; Personal Access Token (PAT):</strong><ol><li>Wejd&#x17a; na <a href="https://github.com/settings/personal-access-tokens/new" target="_blank">github.com/settings/personal-access-tokens/new</a></li><li>Wybierz <code>Fine-grained tokens</code> (zalecane)</li><li>Token name: <code>LaserArt Admin</code>, expiration: wedle uznania</li><li>Repository access: <strong>Only select repositories</strong> &rarr; wybierz swoje repo</li><li>Permissions: rozwi&#x144; <strong>Repository permissions</strong> &rarr; <strong>Contents</strong> &rarr; ustaw na <strong>Read and write</strong></li><li>Kliknij <code>Generate token</code> i skopiuj wygenerowany ci&#x105;g (zaczyna si&#x119; od <code>github_pat_...</code>)</li></ol></div><div class="row"><div class="form-grp"><label class="form-lbl" for="ghOwner">Login GitHub (owner)</label><input type="text" id="ghOwner" class="form-ctrl" placeholder="np. jankowalski"><div class="form-hint">Tw&#xf3;j login w GitHubie</div></div><div class="form-grp"><label class="form-lbl" for="ghRepo">Nazwa repozytorium</label><input type="text" id="ghRepo" class="form-ctrl" placeholder="np. laserart-strona"><div class="form-hint">Nazwa repo (bez loginu)</div></div></div><div class="row"><div class="form-grp"><label class="form-lbl" for="ghBranch">Branch</label><input type="text" id="ghBranch" class="form-ctrl" placeholder="main" value="main"><div class="form-hint">Zazwyczaj <code>main</code> lub <code>master</code></div></div><div class="form-grp"><label class="form-lbl" for="ghPath">&#x15a;cie&#x17c;ka pliku</label><input type="text" id="ghPath" class="form-ctrl" placeholder="data.json" value="data.json"><div class="form-hint">Domy&#x15b;lnie <code>data.json</code></div></div></div><div class="form-grp"><label class="form-lbl" for="ghToken">Personal Access Token</label><input type="password" id="ghToken" class="form-ctrl" placeholder="github_pat_..." autocomplete="off"><div class="form-hint">Token zapisany jest tylko w Twojej przegl&#x105;darce. Nigdy nie jest wysy&#x142;any poza GitHub.</div></div><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn btn-pri" id="ghSave">&#x1F4BE; Zapisz konfiguracj&#x119;</button><button class="btn btn-out" id="ghTest">&#x1F50C; Przetestuj po&#x142;&#x105;czenie</button></div></div><div class="card"><h3>&#x1F511; Zmie&#x144; has&#x142;o</h3><div class="desc">Has&#x142;o do logowania w panelu (przechowywane jako hash w Twojej przegl&#x105;darce)</div><div class="row"><div class="form-grp"><label class="form-lbl" for="pwNew">Nowe has&#x142;o</label><input type="password" id="pwNew" class="form-ctrl" placeholder="Min. 6 znak&#xf3;w" autocomplete="new-password"></div><div class="form-grp"><label class="form-lbl" for="pwConfirm">Powt&#xf3;rz has&#x142;o</label><input type="password" id="pwConfirm" class="form-ctrl" placeholder="Powt&#xf3;rz has&#x142;o" autocomplete="new-password"></div></div><button class="btn btn-pri" id="pwChange">Zmie&#x144; has&#x142;o</button></div></section></main></div><div class="toast" id="toast" role="alert" aria-live="polite"></div><script>
+(function(){
+'use strict';
+
+const STORAGE_CONFIG = 'laserart_config';
+const STORAGE_GH = 'laserart_github';
+const STORAGE_PW = 'laserart_pwhash';
+const STORAGE_AUTH = 'laserart_auth';
+const STORAGE_LAST_SHA = 'laserart_last_sha';
+const STORAGE_PUBLISHED = 'laserart_published_config';
+
+const DEFAULTS = {
+  hero: {
+    badge: "Ręcznie wykonane laserem diodowym",
+    titleLine1: "Sztuka drewna",
+    titleLine2: "cięta",
+    titleHighlight: "światłem",
+    description: "Precyzyjne wycinanie i grawerowanie laserem diodowym w sklejce i HDF. Tworzymy unikalne dekoracje, napisy i ozdoby — od projektu do gotowego wyrobu.",
+    stats: [
+      {value: "100+", label: "Realizacji"},
+      {value: "4", label: "Materiały"},
+      {value: "0,1mm", label: "Precyzja cięcia"}
+    ]
+  },
+  contact: {
+    email: "xeomsc@gmail.com",
+    responseTime: "Do 24 godzin w dni robocze",
+    realizationTime: "2-5 dni roboczych od akceptacji projektu",
+    delivery: "Kurier, Paczkomat lub odbiór osobisty"
+  },
+  products: [
+    {id:"p1", icon:"🌸", badge:"Bestseller", category:"Dekoracje ścienne", name:"Mandala — Dekoracja ścienna", description:"Precyzyjnie wycięta mandala ze sklejki. Rozmiary 20–60 cm. Możliwość wyboru wzoru lub wykonania na zamówienie.", tags:["Sklejka 3mm","Ø 20–60 cm","Personalizacja"], priceLabel:"Orientacyjna cena od", price:"35 zł", priceFrom:""},
+    {id:"p2", icon:"✍️", badge:"", category:"Napisy i litery", name:"Ozdobny napis personalizowany", description:"Imię, data, cytat lub dowolny tekst w ozdobnej czcionce. Idealny prezent na urodziny lub rocznicę.", tags:["Sklejka 4mm","Do 50 cm dł.","Własny tekst"], priceLabel:"Orientacyjna cena od", price:"25 zł", priceFrom:""},
+    {id:"p3", icon:"🎄", badge:"Sezonowe", category:"Ozdoby świąteczne", name:"Zestaw ozdób bożonarodzeniowych", description:"Ażurowe bombki, śnieżynki, renifery, gwiazdki. Sprzedawane w zestawach lub pojedynczo. Możliwość grawerowania imion.", tags:["HDF 3mm","5–20 szt.","Z grawerem"], priceLabel:"Orientacyjna cena od", price:"40 zł", priceFrom:"za zestaw 5 szt."},
+    {id:"p4", icon:"🖼️", badge:"", category:"Ramki i tabliczki", name:"Ramka na zdjęcie z dedykacją", description:"Elegancka ramka z wygrawerowanym napisem lub datą. Formaty A5, A4 i A3. Idealny prezent.", tags:["Sklejka 4mm","A5 / A4 / A3","Grawer"], priceLabel:"Orientacyjna cena od", price:"45 zł", priceFrom:""},
+    {id:"p5", icon:"🕐", badge:"", category:"Zegarki ścienne", name:"Zegar ścienny — drewniany design", description:"Oryginalny zegar z laserowo wyciętą tarczą. Mechanizm kwarcowy w zestawie. Różne rozmiary i wzory.", tags:["Sklejka 5mm","Ø 25–50 cm","Mechanizm w zestawie"], priceLabel:"Orientacyjna cena od", price:"75 zł", priceFrom:""},
+    {id:"p6", icon:"🏷️", badge:"", category:"Szyldy i tabliczki", name:"Szyld lub tabliczka firmowa", description:"Profesjonalne szyldy dla firm i biur lub personalizowane tabliczki domowe. Projekt graficzny w cenie. Od 1 szt.", tags:["Sklejka 5mm / HDF","Własny projekt","Od 1 szt."], priceLabel:"Wycena indywidualna", price:"od 60 zł", priceFrom:""}
+  ],
+  gallery: [
+    {id:"g1", icon:"🌸", title:"Mandala — Dekoracja ścienna", description:"Precyzyjnie wycięta mandala ze sklejki 3mm. Rozmiary 20-60 cm.", material:"Sklejka 3mm", category:"dekoracje", label:"Mandala ścienna"},
+    {id:"g2", icon:"✍️", title:"Napis — Rodzina", description:"Ozdobny napis ze sklejki 4mm. Personalizacja imion i dat.", material:"Sklejka 4mm", category:"napisy", label:"Napis Rodzina"},
+    {id:"g3", icon:"🎄", title:"Ażurowa bombka", description:"Bombka choinkowa z HDF 3mm. Różne wzory.", material:"HDF 3mm", category:"swieta", label:"Bombka ażurowa"},
+    {id:"g4", icon:"🚪", title:"Tabliczka na drzwi", description:"Personalizowana tabliczka z imieniem lub numerem.", material:"Sklejka 5mm", category:"personalizowane", label:"Tabliczka na drzwi"},
+    {id:"g5", icon:"🌙", title:"Łapacz snów", description:"Geometryczny łapacz snów z precyzyjnym wzorem.", material:"Sklejka 3mm", category:"ozdoby", label:"Łapacz snów"},
+    {id:"g6", icon:"🗺️", title:"Mapa Polski", description:"Mapa Polski ze sklejki 4mm z wyciętymi województwami.", material:"Sklejka 4mm", category:"dekoracje", label:"Mapa Polski"},
+    {id:"g7", icon:"🏡", title:"Napis Welcome", description:"Elegancki napis powitalny.", material:"HDF 3mm", category:"napisy", label:"Napis Welcome"},
+    {id:"g8", icon:"🦌", title:"Renifer świąteczny", description:"Zestaw ozdób świątecznych.", material:"Sklejka 3mm", category:"swieta", label:"Renifer świąteczny"},
+    {id:"g9", icon:"🖼️", title:"Ramka na zdjęcie", description:"Ramka z wygrawerowanym napisem lub datą.", material:"Sklejka 4mm", category:"personalizowane", label:"Ramka z grawerem"},
+    {id:"g10", icon:"💎", title:"Geometria 3D", description:"Trójwymiarowa dekoracja geometryczna.", material:"HDF 3mm", category:"ozdoby", label:"Geometria 3D"},
+    {id:"g11", icon:"🕐", title:"Zegar ścienny", description:"Zegar z laserowo wyciętą tarczą. Mechanizm w zestawie.", material:"Sklejka 5mm", category:"dekoracje", label:"Zegar ścienny"},
+    {id:"g12", icon:"🍽️", title:"Deska kuchenna z grawerem", description:"Deska z wygrawerowanym logo lub dedykacją.", material:"Sklejka 5mm", category:"personalizowane", label:"Deska z grawerem"}
+  ]
+};
+
+let state = {
+  config: null,
+  gh: null,
+  dirty: false
+};
+
+function clone(o){return JSON.parse(JSON.stringify(o));}
+function uid(prefix){return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2,6);}
+
+async function sha256(s){
+  const b = new TextEncoder().encode(s);
+  const h = await crypto.subtle.digest('SHA-256', b);
+  return Array.from(new Uint8Array(h)).map(x => x.toString(16).padStart(2,'0')).join('');
+}
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORAGE_CONFIG);
+    state.config = raw ? JSON.parse(raw) : clone(DEFAULTS);
+  }catch(e){state.config = clone(DEFAULTS);}
+  try{
+    state.gh = JSON.parse(localStorage.getItem(STORAGE_GH) || 'null');
+  }catch(e){state.gh = null;}
+  computeDirty();
+}
+
+function saveConfig(){
+  localStorage.setItem(STORAGE_CONFIG, JSON.stringify(state.config));
+  computeDirty();
+}
+
+function computeDirty(){
+  const published = localStorage.getItem(STORAGE_PUBLISHED);
+  state.dirty = published !== JSON.stringify(state.config);
+}
+
+function showToast(msg, type){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + (type || '');
+  clearTimeout(t._tmr);
+  t._tmr = setTimeout(()=>{ t.className = 'toast'; }, 3500);
+}
+
+function escapeHtml(s){
+  if(s == null) return '';
+  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+/* ============= UI: tab switching ============= */
+function switchTab(name){
+  document.querySelectorAll('.side-nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  if(name === 'dashboard') refreshDashboard();
+  if(name === 'hero') loadHeroForm();
+  if(name === 'products') renderProductList();
+  if(name === 'gallery') renderGalleryList();
+  if(name === 'contact') loadContactForm();
+  if(name === 'publish') refreshPublish();
+  if(name === 'settings') loadSettingsForm();
+  window.scrollTo(0,0);
+}
+window.switchTab = switchTab;
+
+/* ============= Dashboard ============= */
+function refreshDashboard(){
+  document.getElementById('statProducts').textContent = state.config.products.length;
+  document.getElementById('statGallery').textContent = state.config.gallery.length;
+  document.getElementById('statChanges').textContent = state.dirty ? 'TAK — opublikuj' : 'brak';
+  document.getElementById('statChanges').style.color = state.dirty ? 'var(--wood)' : 'var(--green)';
+}
+
+/* ============= Hero ============= */
+function loadHeroForm(){
+  const h = state.config.hero;
+  document.getElementById('hBadge').value = h.badge || '';
+  document.getElementById('hTitle1').value = h.titleLine1 || '';
+  document.getElementById('hTitle2').value = h.titleLine2 || '';
+  document.getElementById('hHigh').value = h.titleHighlight || '';
+  document.getElementById('hDesc').value = h.description || '';
+  document.getElementById('hS1v').value = h.stats[0]?.value || '';
+  document.getElementById('hS1l').value = h.stats[0]?.label || '';
+  document.getElementById('hS2v').value = h.stats[1]?.value || '';
+  document.getElementById('hS2l').value = h.stats[1]?.label || '';
+  document.getElementById('hS3v').value = h.stats[2]?.value || '';
+  document.getElementById('hS3l').value = h.stats[2]?.label || '';
+}
+document.getElementById('heroSave').addEventListener('click', () => {
+  state.config.hero = {
+    badge: document.getElementById('hBadge').value,
+    titleLine1: document.getElementById('hTitle1').value,
+    titleLine2: document.getElementById('hTitle2').value,
+    titleHighlight: document.getElementById('hHigh').value,
+    description: document.getElementById('hDesc').value,
+    stats: [
+      {value: document.getElementById('hS1v').value, label: document.getElementById('hS1l').value},
+      {value: document.getElementById('hS2v').value, label: document.getElementById('hS2l').value},
+      {value: document.getElementById('hS3v').value, label: document.getElementById('hS3l').value}
+    ]
+  };
+  saveConfig();
+  showToast('Sekcja Hero zapisana lokalnie. Pamiętaj o publikacji!', 'ok');
+});
+
+/* ============= Contact ============= */
+function loadContactForm(){
+  const c = state.config.contact;
+  document.getElementById('cEmail').value = c.email || '';
+  document.getElementById('cResp').value = c.responseTime || '';
+  document.getElementById('cReal').value = c.realizationTime || '';
+  document.getElementById('cDel').value = c.delivery || '';
+}
+document.getElementById('contactSave').addEventListener('click', () => {
+  state.config.contact = {
+    email: document.getElementById('cEmail').value.trim(),
+    responseTime: document.getElementById('cResp').value,
+    realizationTime: document.getElementById('cReal').value,
+    delivery: document.getElementById('cDel').value
+  };
+  saveConfig();
+  showToast('Dane kontaktowe zapisane lokalnie.', 'ok');
+});
+
+/* ============= Products ============= */
+function renderProductList(){
+  const list = document.getElementById('productList');
+  if(state.config.products.length === 0){
+    list.innerHTML = '<div class="empty">Brak produktów. Kliknij "+ Dodaj produkt" aby dodać pierwszy.</div>';
+    return;
+  }
+  list.innerHTML = state.config.products.map((p, i) => `
+    <div class="list-item" data-id="${escapeHtml(p.id)}">
+      <div class="list-hd">
+        <div class="list-hd-info" onclick="this.closest('.list-item').classList.toggle('open')">
+          <div class="list-hd-ico">${escapeHtml(p.icon)}</div>
+          <div class="list-hd-txt">
+            <div class="list-hd-name">${escapeHtml(p.name || 'Nowy produkt')}</div>
+            <div class="list-hd-sub">${escapeHtml(p.category || '')} · ${escapeHtml(p.price || '')}</div>
+          </div>
+        </div>
+        <div class="list-hd-actions">
+          <button class="btn btn-ghost btn-sm" onclick="moveProduct('${p.id}',-1)" title="W górę">▲</button>
+          <button class="btn btn-ghost btn-sm" onclick="moveProduct('${p.id}',1)" title="W dół">▼</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteProduct('${p.id}')" title="Usuń">×</button>
+          <button class="list-toggle" onclick="this.closest('.list-item').classList.toggle('open')">▼</button>
+        </div>
+      </div>
+      <div class="list-body">
+        <div class="row">
+          <div class="form-grp"><label class="form-lbl">Ikona (emoji)</label><input type="text" data-fld="icon" class="form-ctrl" value="${escapeHtml(p.icon)}"></div>
+          <div class="form-grp"><label class="form-lbl">Etykieta (np. Bestseller)</label><input type="text" data-fld="badge" class="form-ctrl" value="${escapeHtml(p.badge)}" placeholder="puste = brak"></div>
+        </div>
+        <div class="form-grp"><label class="form-lbl">Kategoria</label><input type="text" data-fld="category" class="form-ctrl" value="${escapeHtml(p.category)}"></div>
+        <div class="form-grp"><label class="form-lbl">Nazwa</label><input type="text" data-fld="name" class="form-ctrl" value="${escapeHtml(p.name)}"></div>
+        <div class="form-grp"><label class="form-lbl">Opis</label><textarea data-fld="description" class="form-ctrl" rows="3">${escapeHtml(p.description)}</textarea></div>
+        <div class="form-grp"><label class="form-lbl">Tagi (oddzielone przecinkiem)</label><input type="text" data-fld="tags" class="form-ctrl" value="${escapeHtml((p.tags||[]).join(', '))}"></div>
+        <div class="row row-3">
+          <div class="form-grp"><label class="form-lbl">Etykieta ceny</label><input type="text" data-fld="priceLabel" class="form-ctrl" value="${escapeHtml(p.priceLabel)}"></div>
+          <div class="form-grp"><label class="form-lbl">Cena</label><input type="text" data-fld="price" class="form-ctrl" value="${escapeHtml(p.price)}"></div>
+          <div class="form-grp"><label class="form-lbl">Dopisek (opcjonalny)</label><input type="text" data-fld="priceFrom" class="form-ctrl" value="${escapeHtml(p.priceFrom)}" placeholder="np. za zestaw 5 szt."></div>
+        </div>
+        <button class="btn btn-pri btn-sm" onclick="saveProduct('${p.id}', this)">💾 Zapisz</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+window.saveProduct = function(id, btn){
+  const item = btn.closest('.list-item');
+  const p = state.config.products.find(x => x.id === id);
+  if(!p) return;
+  item.querySelectorAll('[data-fld]').forEach(el => {
+    const k = el.dataset.fld;
+    if(k === 'tags') p[k] = el.value.split(',').map(s => s.trim()).filter(Boolean);
+    else p[k] = el.value;
+  });
+  saveConfig();
+  renderProductList();
+  showToast('Produkt zapisany.', 'ok');
+};
+
+window.deleteProduct = function(id){
+  if(!confirm('Na pewno usunąć ten produkt?')) return;
+  state.config.products = state.config.products.filter(p => p.id !== id);
+  saveConfig();
+  renderProductList();
+  showToast('Produkt usunięty.', 'ok');
+};
+
+window.moveProduct = function(id, dir){
+  const arr = state.config.products;
+  const i = arr.findIndex(p => p.id === id);
+  const j = i + dir;
+  if(i < 0 || j < 0 || j >= arr.length) return;
+  [arr[i], arr[j]] = [arr[j], arr[i]];
+  saveConfig();
+  renderProductList();
+};
+
+document.getElementById('addProduct').addEventListener('click', () => {
+  state.config.products.unshift({
+    id: uid('p'), icon: '📦', badge: '', category: 'Nowa kategoria', name: 'Nowy produkt',
+    description: 'Opis produktu...', tags: ['Sklejka 3mm'], priceLabel: 'Orientacyjna cena od',
+    price: '0 zł', priceFrom: ''
+  });
+  saveConfig();
+  renderProductList();
+  showToast('Produkt dodany na górze listy.', 'ok');
+});
+/* ============= Gallery ============= */
+function renderGalleryList(){
+  const list = document.getElementById('galleryList');
+  if(state.config.gallery.length === 0){
+    list.innerHTML = '<div class="empty">Brak realizacji. Kliknij "+ Dodaj realizację" aby dodać pierwszą.</div>';
+    return;
+  }
+  list.innerHTML = state.config.gallery.map((g, i) => `
+    <div class="list-item" data-id="${escapeHtml(g.id)}">
+      <div class="list-hd">
+        <div class="list-hd-info" onclick="this.closest('.list-item').classList.toggle('open')">
+          <div class="list-hd-ico">${escapeHtml(g.icon)}</div>
+          <div class="list-hd-txt">
+            <div class="list-hd-name">${escapeHtml(g.title || g.label || 'Nowa realizacja')}</div>
+            <div class="list-hd-sub">${escapeHtml(g.category || '')} · ${escapeHtml(g.material || '')}</div>
+          </div>
+        </div>
+        <div class="list-hd-actions">
+          <button class="btn btn-ghost btn-sm" onclick="moveGallery('${g.id}',-1)">▲</button>
+          <button class="btn btn-ghost btn-sm" onclick="moveGallery('${g.id}',1)">▼</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteGallery('${g.id}')">×</button>
+          <button class="list-toggle" onclick="this.closest('.list-item').classList.toggle('open')">▼</button>
+        </div>
+      </div>
+      <div class="list-body">
+        <div class="row">
+          <div class="form-grp"><label class="form-lbl">Ikona (emoji)</label><input type="text" data-fld="icon" class="form-ctrl" value="${escapeHtml(g.icon)}"></div>
+          <div class="form-grp"><label class="form-lbl">Kategoria</label><input type="text" data-fld="category" class="form-ctrl" value="${escapeHtml(g.category)}" placeholder="dekoracje / napisy / ozdoby / swieta / personalizowane"></div>
+        </div>
+        <div class="form-grp"><label class="form-lbl">Tytuł (w okienku po kliknięciu)</label><input type="text" data-fld="title" class="form-ctrl" value="${escapeHtml(g.title)}"></div>
+        <div class="form-grp"><label class="form-lbl">Etykieta (na overlayu hover)</label><input type="text" data-fld="label" class="form-ctrl" value="${escapeHtml(g.label)}"></div>
+        <div class="form-grp"><label class="form-lbl">Opis (w okienku)</label><textarea data-fld="description" class="form-ctrl" rows="2">${escapeHtml(g.description)}</textarea></div>
+        <div class="form-grp"><label class="form-lbl">Materiał</label><input type="text" data-fld="material" class="form-ctrl" value="${escapeHtml(g.material)}"></div>
+        <button class="btn btn-pri btn-sm" onclick="saveGallery('${g.id}', this)">💾 Zapisz</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+window.saveGallery = function(id, btn){
+  const item = btn.closest('.list-item');
+  const g = state.config.gallery.find(x => x.id === id);
+  if(!g) return;
+  item.querySelectorAll('[data-fld]').forEach(el => g[el.dataset.fld] = el.value);
+  saveConfig();
+  renderGalleryList();
+  showToast('Realizacja zapisana.', 'ok');
+};
+window.deleteGallery = function(id){
+  if(!confirm('Na pewno usunąć tę realizację?')) return;
+  state.config.gallery = state.config.gallery.filter(g => g.id !== id);
+  saveConfig();
+  renderGalleryList();
+  showToast('Usunięto.', 'ok');
+};
+window.moveGallery = function(id, dir){
+  const arr = state.config.gallery;
+  const i = arr.findIndex(g => g.id === id);
+  const j = i + dir;
+  if(i < 0 || j < 0 || j >= arr.length) return;
+  [arr[i], arr[j]] = [arr[j], arr[i]];
+  saveConfig();
+  renderGalleryList();
+};
+document.getElementById('addGallery').addEventListener('click', () => {
+  state.config.gallery.unshift({
+    id: uid('g'), icon: '🖼️', title: 'Nowa realizacja', description: 'Opis projektu...',
+    material: 'Sklejka 3mm', category: 'dekoracje', label: 'Nowa realizacja'
+  });
+  saveConfig();
+  renderGalleryList();
+  showToast('Realizacja dodana.', 'ok');
+});
+
+/* ============= GitHub: settings ============= */
+function loadSettingsForm(){
+  const g = state.gh || {};
+  document.getElementById('ghOwner').value = g.owner || '';
+  document.getElementById('ghRepo').value = g.repo || '';
+  document.getElementById('ghBranch').value = g.branch || 'main';
+  document.getElementById('ghPath').value = g.path || 'data.json';
+  document.getElementById('ghToken').value = g.token || '';
+}
+document.getElementById('ghSave').addEventListener('click', () => {
+  state.gh = {
+    owner: document.getElementById('ghOwner').value.trim(),
+    repo: document.getElementById('ghRepo').value.trim(),
+    branch: document.getElementById('ghBranch').value.trim() || 'main',
+    path: document.getElementById('ghPath').value.trim() || 'data.json',
+    token: document.getElementById('ghToken').value.trim()
+  };
+  if(!state.gh.owner || !state.gh.repo || !state.gh.token){
+    showToast('Wypełnij login, nazwę repo i token.', 'err');
+    return;
+  }
+  localStorage.setItem(STORAGE_GH, JSON.stringify(state.gh));
+  updateGhBadge();
+  showToast('Konfiguracja GitHub zapisana.', 'ok');
+});
+
+document.getElementById('ghTest').addEventListener('click', async () => {
+  const btn = document.getElementById('ghTest');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Sprawdzanie...';
+  try{
+    await ghSaveConfig(true);
+    showToast('Połączenie OK — token działa.', 'ok');
+  }catch(e){
+    showToast('Błąd: ' + e.message, 'err');
+  }finally{
+    btn.disabled = false;
+    btn.innerHTML = '🔌 Przetestuj połączenie';
+  }
+});
+
+function updateGhBadge(){
+  const badge = document.getElementById('ghStatus');
+  if(state.gh && state.gh.owner && state.gh.repo && state.gh.token){
+    badge.className = 'gh-badge on';
+    badge.textContent = `GitHub: ${state.gh.owner}/${state.gh.repo}`;
+  }else{
+    badge.className = 'gh-badge off';
+    badge.textContent = 'GitHub: niepołączony';
+  }
+}
+
+/* ============= GitHub API ============= */
+async function ghGetFile(){
+  const {owner, repo, branch, path, token} = state.gh;
+  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${encodeURIComponent(branch)}`;
+  const res = await fetch(url, {
+    headers: {'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json'}
+  });
+  if(res.status === 404) return {sha: null, exists: false};
+  if(!res.ok){
+    const e = await res.json().catch(()=>({message: 'HTTP ' + res.status}));
+    throw new Error(e.message || ('HTTP ' + res.status));
+  }
+  const data = await res.json();
+  return {sha: data.sha, exists: true, content: data.content};
+}
+
+async function ghSaveConfig(testOnly){
+  if(!state.gh || !state.gh.token){
+    throw new Error('Brak konfiguracji GitHub. Wypełnij ustawienia.');
+  }
+  const file = await ghGetFile();
+  if(testOnly) return file;
+  
+  const {owner, repo, branch, path, token} = state.gh;
+  const json = JSON.stringify(state.config, null, 2);
+  const b64 = btoa(unescape(encodeURIComponent(json)));
+  
+  const body = {
+    message: 'Update content via admin panel',
+    content: b64,
+    branch: branch
+  };
+  if(file.sha) body.sha = file.sha;
+  
+  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: {
+      'Authorization': 'Bearer ' + token,
+      'Accept': 'application/vnd.github+json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+  if(!res.ok){
+    const e = await res.json().catch(()=>({message: 'HTTP ' + res.status}));
+    throw new Error(e.message || ('HTTP ' + res.status));
+  }
+  const result = await res.json();
+  if(result.content && result.content.sha){
+    localStorage.setItem(STORAGE_LAST_SHA, result.content.sha);
+  }
+  localStorage.setItem(STORAGE_PUBLISHED, JSON.stringify(state.config));
+  computeDirty();
+  return result;
+}
+
+/* ============= Publish tab ============= */
+function refreshPublish(){
+  const status = document.getElementById('publishStatus');
+  const btn = document.getElementById('publishBtn');
+  const link = document.getElementById('liveSiteLink');
+  
+  if(!state.gh || !state.gh.owner || !state.gh.token){
+    status.textContent = '⚠️ Brak konfiguracji GitHub. Przejdź do Ustawień.';
+    btn.disabled = true;
+    return;
+  }
+  link.href = `https://${state.gh.owner}.github.io/${state.gh.repo}/`;
+  link.textContent = `${state.gh.owner}.github.io/${state.gh.repo}`;
+  
+  if(state.dirty){
+    status.innerHTML = '🟡 <strong>Masz niezapisane zmiany lokalne</strong>. Kliknij poniżej aby je opublikować na GitHub.';
+    btn.disabled = false;
+  }else{
+    status.innerHTML = '✅ <strong>Wszystko zsynchronizowane.</strong> Brak zmian do opublikowania.';
+    btn.disabled = false;
+  }
+}
+
+document.getElementById('publishBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('publishBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> <span>Publikowanie...</span>';
+  try{
+    await ghSaveConfig(false);
+    showToast('✅ Opublikowano! Strona zaktualizuje się w 30-60 sekund.', 'ok');
+    refreshPublish();
+  }catch(e){
+    showToast('Błąd publikacji: ' + e.message, 'err');
+    btn.disabled = false;
+  }finally{
+    btn.innerHTML = '<span>🚀</span><span>Publikuj zmiany na GitHub</span>';
+  }
+});
+
+/* ============= Export / Import / Reset ============= */
+document.getElementById('exportJson').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(state.config, null, 2)], {type: 'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'data.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast('Pobrano data.json.', 'ok');
+});
+document.getElementById('importJsonBtn').addEventListener('click', () => {
+  document.getElementById('importJsonFile').click();
+});
+document.getElementById('importJsonFile').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if(!file) return;
+  try{
+    const text = await file.text();
+    const data = JSON.parse(text);
+    if(!data.hero || !data.products || !data.gallery || !data.contact){
+      throw new Error('Niepoprawny format pliku.');
+    }
+    if(!confirm('Wczytanie zastąpi obecną konfigurację. Kontynuować?')) return;
+    state.config = data;
+    saveConfig();
+    showToast('Konfiguracja wczytana.', 'ok');
+  }catch(err){
+    showToast('Błąd: ' + err.message, 'err');
+  }
+  e.target.value = '';
+});
+document.getElementById('resetAll').addEventListener('click', () => {
+  if(!confirm('Przywrócić wszystkie domyślne wartości? Tej operacji nie można cofnąć.')) return;
+  state.config = clone(DEFAULTS);
+  saveConfig();
+  showToast('Przywrócono domyślne wartości.', 'ok');
+  switchTab('dashboard');
+});
+
+/* ============= Password change ============= */
+document.getElementById('pwChange').addEventListener('click', async () => {
+  const a = document.getElementById('pwNew').value;
+  const b = document.getElementById('pwConfirm').value;
+  if(a.length < 6){ showToast('Hasło musi mieć min. 6 znaków.', 'err'); return; }
+  if(a !== b){ showToast('Hasła nie są identyczne.', 'err'); return; }
+  const hash = await sha256(a);
+  localStorage.setItem(STORAGE_PW, hash);
+  document.getElementById('pwNew').value = '';
+  document.getElementById('pwConfirm').value = '';
+  showToast('Hasło zmienione.', 'ok');
+});
+
+/* ============= Login ============= */
+async function tryLogin(password){
+  const stored = localStorage.getItem(STORAGE_PW);
+  const target = stored || (await sha256('laser2025'));
+  return (await sha256(password)) === target;
+}
+
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const pw = document.getElementById('pass').value;
+  const err = document.getElementById('loginErr');
+  if(await tryLogin(pw)){
+    sessionStorage.setItem(STORAGE_AUTH, '1');
+    showAdmin();
+  }else{
+    err.classList.add('show');
+    document.getElementById('pass').value = '';
+  }
+});
+document.getElementById('pass').addEventListener('input', () => {
+  document.getElementById('loginErr').classList.remove('show');
+});
+document.getElementById('logoutBtn').addEventListener('click', (e) => {
+  e.preventDefault();
+  sessionStorage.removeItem(STORAGE_AUTH);
+  location.reload();
+});
+
+function showAdmin(){
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('adminPanel').classList.remove('hidden');
+  loadState();
+  updateGhBadge();
+  refreshDashboard();
+}
+
+document.querySelectorAll('.side-nav button').forEach(btn => {
+  btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+});
+
+/* ============= Init ============= */
+if(sessionStorage.getItem(STORAGE_AUTH) === '1'){
+  showAdmin();
+}else{
+  setTimeout(() => document.getElementById('pass').focus(), 100);
+}
+
+})();
+</script>
+</body>
+</html>
