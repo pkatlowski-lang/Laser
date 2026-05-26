@@ -69,7 +69,11 @@
         const tags = (p.tags || []).map(t => '<span class="prod-tag">' + esc(t) + '</span>').join('');
         const subj = encodeURIComponent('Zapytanie o ' + (p.name || ''));
         const body = encodeURIComponent('Dzień dobry,\n\nProszę o wycenę produktu: ' + (p.name || '') + '.\n\nPozdrawiam');
-        return '<article class="prod-card fade-up"><div class="prod-img">' + esc(p.icon) + badge +
+        const prodImgContent = p.imageUrl
+          ? '<img src="' + esc(p.imageUrl) + '" style="width:100%;height:100%;object-fit:cover;display:block">'
+          : esc(p.icon);
+        const prodImgStyle = p.imageUrl ? ' style="opacity:1;font-size:0"' : '';
+        return '<article class="prod-card fade-up"><div class="prod-img"' + prodImgStyle + '>' + prodImgContent + badge +
           '</div><div class="prod-body"><p class="prod-cat">' + esc(p.category) +
           '</p><h3 class="prod-name">' + esc(p.name) + '</h3><p class="prod-desc">' + esc(p.description) +
           '</p><div class="prod-tags">' + tags + '</div><div class="prod-foot"><div>' +
