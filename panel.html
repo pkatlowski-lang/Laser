@@ -441,8 +441,8 @@ document.getElementById('addGallery').addEventListener('click', () => {
 /* ============= GitHub: settings ============= */
 function loadSettingsForm(){
   const g = state.gh || {};
-  document.getElementById('ghOwner').value = g.owner || '';
-  document.getElementById('ghRepo').value = g.repo || '';
+  document.getElementById('ghOwner').value = g.owner || 'pkatlowski-lang';
+  document.getElementById('ghRepo').value = g.repo || 'Laser';
   document.getElementById('ghBranch').value = g.branch || 'main';
   document.getElementById('ghPath').value = g.path || 'data.json';
   document.getElementById('ghToken').value = g.token || '';
