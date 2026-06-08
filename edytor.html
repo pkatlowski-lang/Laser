@@ -118,6 +118,32 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 .gallery-card .del-base:hover{color:var(--cut);background:rgba(255,255,255,.08)}
 .gallery-upload-btn{margin:0 14px 16px;width:calc(100% - 28px);justify-content:center;cursor:pointer;font-size:.76rem}
 
+/* ---- Depth / 3D layers ---- */
+.d-badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:16px;padding:0 4px;border-radius:3px;font-size:.6rem;font-weight:700;color:#fff;flex-shrink:0}
+.d1{background:#2a9d8f}.d2{background:#e76f51}.d3{background:#9b5de5}.d4{background:#f4a261}.d5{background:#06d6a0}.d6{background:#e63946}.dN{background:#888}
+.depth-ctrl{display:flex;align-items:center;gap:6px}
+.depth-ctrl .dbtn{width:24px;height:24px;border:1px solid var(--border);background:var(--surface2);border-radius:5px;cursor:pointer;font-size:.9rem;color:var(--text);display:flex;align-items:center;justify-content:center;padding:0}
+.depth-ctrl .dbtn:hover{border-color:var(--accent);color:var(--accent)}
+.depth-ctrl .dval{min-width:22px;text-align:center;font-size:.9rem;font-weight:700;color:var(--text)}
+
+/* ---- Text frame ---- */
+.frame-ctrl{display:flex;gap:6px;align-items:center}
+.frame-ctrl input[type=number]{width:68px;flex:0 0 68px}
+
+/* ---- 3D export modal ---- */
+.modal-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:2000;align-items:flex-start;justify-content:center;padding-top:50px;overflow-y:auto}
+.modal-ov.open{display:flex}
+.modal-box{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px 24px 24px;max-width:740px;width:95vw;position:relative;margin-bottom:40px}
+.modal-box h3{margin:0 0 6px;font-size:1.05rem}
+.modal-close{position:absolute;top:10px;right:14px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.15rem;line-height:1}
+.modal-close:hover{color:var(--text)}
+.layers3d-grid{display:flex;flex-wrap:wrap;gap:12px;margin-top:16px}
+.layer3d-card{background:var(--surface2);border:1.5px solid var(--border);border-radius:9px;padding:10px 12px;display:flex;flex-direction:column;align-items:center;gap:7px;min-width:140px}
+.layer3d-card .card-head{display:flex;align-items:center;gap:7px;font-size:.8rem;font-weight:700}
+.layer3d-card .lcount{font-size:.71rem;color:var(--muted)}
+.layer3d-card svg{width:120px;height:76px;overflow:visible;background:#111;border-radius:5px;border:1px solid var(--border)}
+.modal-note{margin-top:16px;font-size:.76rem;color:var(--muted);line-height:1.7;border-top:1px solid var(--border);padding-top:12px}
+
 .legend{display:flex;gap:14px;flex-wrap:wrap;padding:10px 16px;border-top:1px solid var(--border);font-size:.72rem;color:var(--muted)}
 .legend span{display:inline-flex;align-items:center;gap:6px}
 .legend i{width:13px;height:13px;border-radius:3px;display:inline-block}
@@ -158,6 +184,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     </div>
     <div class="tgroup">
       <button class="tbtn" id="exportBtn" style="background:linear-gradient(135deg,var(--accent),var(--accent-dark));border-color:var(--accent);color:#1a1308">⬇ Pobierz SVG</button>
+      <button class="tbtn" id="export3dBtn" title="Eksport 3D — pobierz osobne SVG dla każdej warstwy głębokości i sklejaj je, by uzyskać efekt 3D">🧊 Eksport 3D</button>
     </div>
   </div>
 
@@ -192,6 +219,16 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
       <h2>Właściwości</h2>
       <div id="props"></div>
     </aside>
+  </div>
+</div>
+
+<div class="modal-ov" id="modal3d">
+  <div class="modal-box">
+    <button class="modal-close" id="modal3dClose" title="Zamknij">✕</button>
+    <h3>🧊 Eksport 3D — warstwy do sklejenia</h3>
+    <p style="font-size:.8rem;color:var(--muted);margin:0">Każda warstwa to osobny plik SVG. Wytnij je z osobnych arkuszy materiału i sklejaj od dołu (Warstwa 1) do góry — uzyskasz efekt głębi 3D.</p>
+    <div class="layers3d-grid" id="layers3dGrid"></div>
+    <div class="modal-note" id="modal3dNote"></div>
   </div>
 </div>
 
@@ -515,7 +552,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 
   /* ---------------- Object factory ---------------- */
   function defaultsFor(type){
-    const base={id:uid(),type,name:'',x:0,y:0,w:40,h:40,rotation:0,mode:type==='text'?'engrave':'cut',visible:true,locked:false,repeat:{type:'none'}};
+    const base={id:uid(),type,name:'',x:0,y:0,w:40,h:40,rotation:0,mode:type==='text'?'engrave':'cut',visible:true,locked:false,depth:1,repeat:{type:'none'}};
     if(type==='rect') return {...base,rx:0};
     if(type==='polygon') return {...base,sides:6};
     if(type==='star') return {...base,points:5,inner:0.5};
@@ -1025,8 +1062,18 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
       h+=`<div class="field"><label>Oś lustra</label><select data-prop="repeat.axis">
         ${[['vertical','Pionowa'],['horizontal','Pozioma'],['both','Obie']].map(([v,l])=>`<option value="${v}" ${ (r.axis||'vertical')===v?'selected':''}>${l}</option>`).join('')}</select></div>`;
     }
-    // offset / obwódka (nie dla linii)
-    if(o.type!=='line' && o.type!=='path'){
+    // text frame — dedicated UI for text objects
+    if(o.type==='text'){
+      h+=`<div class="field"><label>🖼 Obramowanie tekstu (ramka cięcia)</label>
+        <div class="frame-ctrl">
+          <input type="number" id="frameOffsetVal" value="3" min="0.5" step="0.5" title="Powiększenie ramki od krawędzi tekstu (mm)">
+          <span style="font-size:.75rem;color:var(--muted)">mm</span>
+          <button type="button" id="frameAddBtn" class="tbtn" style="flex:1;justify-content:center;min-width:0">✂ Dodaj ramkę</button>
+        </div>
+        <p style="font-size:.72rem;color:var(--muted);margin-top:4px;line-height:1.5">Tworzy prostokąt cięcia wokół tekstu. Tekst przełącza się na grawer, ramka jest cięciem.</p></div>`;
+    }
+    // offset / obwódka (nie dla linii i textu — tekst ma dedykowaną ramkę powyżej)
+    if(o.type!=='line' && o.type!=='path' && o.type!=='text'){
       h+=`<div class="field"><label>Obwódka / offset (mm)</label><div class="row2">
         <input type="number" id="offsetVal" value="5" step="1" style="flex:0 0 90px">
         <button type="button" id="offsetBtn" class="tbtn" style="flex:1;justify-content:center">+ Utwórz obwódkę</button></div></div>`;
@@ -1034,6 +1081,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     if(o.type==='path' && (o.d.match(/M/g)||[]).length===1){
       h+=`<div class="field"><button type="button" id="smoothBtn" class="tbtn" style="width:100%;justify-content:center">〰 Wygładź w krzywe</button></div>`;
     }
+    // depth / 3D layer selector
+    const dep = o.depth||1; const dc2=dep<=6?`d${dep}`:'dN';
+    h+=`<div class="field"><label>Warstwa 3D (głębokość)</label>
+      <div class="depth-ctrl">
+        <button type="button" class="dbtn" id="depthDown">−</button>
+        <span class="dval" id="depthVal">${dep}</span>
+        <button type="button" class="dbtn" id="depthUp">+</button>
+        <span class="d-badge ${dc2}" style="margin-left:4px">W${dep}</span>
+      </div>
+      <p style="font-size:.72rem;color:var(--muted);margin-top:4px;line-height:1.5">Przypisz elementy do różnych warstw, a potem użyj 🧊 Eksport 3D — program podzieli projekt na osobne pliki do sklejenia.</p>
+    </div>`;
     propsEl.innerHTML=h;
     bindProps();
   }
@@ -1101,6 +1159,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     if(offBtn) offBtn.addEventListener('click',()=>{ const d=Number(propsEl.querySelector('#offsetVal').value)||0; if(d!==0) addOffsetFromSel(d); });
     const smBtn=propsEl.querySelector('#smoothBtn');
     if(smBtn) smBtn.addEventListener('click',()=>{ const o=getSel(); if(o) smoothPathObj(o); });
+    const frameBtn=propsEl.querySelector('#frameAddBtn');
+    if(frameBtn) frameBtn.addEventListener('click',()=>addTextFrame());
+    const ddBtn=propsEl.querySelector('#depthDown'), duBtn=propsEl.querySelector('#depthUp');
+    if(ddBtn&&duBtn){ const obj=getSel();
+      ddBtn.addEventListener('click',()=>{ obj.depth=Math.max(1,(obj.depth||1)-1); renderAll(); renderProps(); pushHistory(); });
+      duBtn.addEventListener('click',()=>{ obj.depth=(obj.depth||1)+1; renderAll(); renderProps(); pushHistory(); });
+    }
   }
   function normalizeRepeat(type,old){
     if(type==='none') return {type:'none'};
@@ -1210,8 +1275,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     if(!state.objects.length){ layersEl.innerHTML=`<div style="padding:4px 6px;font-size:.78rem;color:var(--muted)">Brak elementów.</div>`; return; }
     layersEl.innerHTML=state.objects.slice().reverse().map(o=>{
       const sw=o.mode==='engrave'?'sw-engrave':o.mode==='score'?'sw-score':'sw-cut';
+      const d=o.depth||1; const dc=d<=6?`d${d}`:'dN';
+      const dbadge=`<span class="d-badge ${dc}" title="Warstwa 3D ${d}">W${d}</span>`;
       return `<div class="layer ${state.selectedIds.includes(o.id)?'sel':''}" data-id="${o.id}">
         <span class="swatch ${sw}"></span>
+        ${dbadge}
         <span class="lname">${escapeXml(autoName(o))}</span>
         <button class="lico" data-act="up" title="Wyżej">▲</button>
         <button class="lico" data-act="down" title="Niżej">▼</button>
@@ -1332,6 +1400,74 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     const map={v:'select',h:'pan',r:'rect',o:'ellipse',p:'polygon',s:'star',l:'line',n:'pen',t:'text'};
     if(map[e.key.toLowerCase()]){ if(state.penDraft) penCancel(); state.tool=map[e.key.toLowerCase()]; syncToolButtons(); }
   });
+
+  /* ---------------- Text frame (Obramowanie tekstu) ---------------- */
+  function addTextFrame(){
+    const o=getSel(); if(!o||o.type!=='text') return;
+    const d=Math.max(0.5, Number(propsEl.querySelector('#frameOffsetVal')?.value)||3);
+    const b=objBBox(o);
+    const fw=Math.max(1,b.w+2*d), fh=Math.max(1,b.h+2*d);
+    const frame={
+      id:uid(), type:'rect', name:'Ramka tekstu',
+      x:b.x-d, y:b.y-d, w:fw, h:fh,
+      rx:Math.min(fw,fh)*0.12,
+      rotation:0, mode:'cut', visible:true, locked:false,
+      depth:o.depth||1, repeat:{type:'none'}
+    };
+    o.mode='engrave';
+    // group: join existing group or create new one
+    if(o.groupId){ frame.groupId=o.groupId; }
+    else { const gid=uid(); o.groupId=gid; frame.groupId=gid; }
+    const i=state.objects.findIndex(x=>x.id===o.id);
+    state.objects.splice(i,0,frame);          // insert below text in render order
+    state.selectedIds=expandGroupSelection([o.id]);
+    pushHistory(); renderAll(); renderProps();
+  }
+
+  /* ---------------- 3D Layer Export ---------------- */
+  const DEPTH_COLORS=['#2a9d8f','#e76f51','#9b5de5','#f4a261','#06d6a0','#e63946'];
+  function depthColor(d){ return DEPTH_COLORS[(d-1)%DEPTH_COLORS.length]; }
+
+  function showExport3D(){
+    const W=state.docW, H=state.docH;
+    const vis=state.objects.filter(o=>o.visible);
+    if(!vis.length){ alert('Projekt jest pusty — nie ma czego eksportować.'); return; }
+    const depths=[...new Set(vis.map(o=>o.depth||1))].sort((a,b)=>a-b);
+    const grid=document.getElementById('layers3dGrid');
+    const note=document.getElementById('modal3dNote');
+
+    // Clear previous blob URLs to avoid memory leaks
+    grid.querySelectorAll('a[href^="blob:"]').forEach(a=>URL.revokeObjectURL(a.href));
+
+    grid.innerHTML=depths.map(dep=>{
+      const objs=vis.filter(o=>(o.depth||1)===dep);
+      const body=objs.map(o=>objMarkup(o,true)).join('');
+      const svgContent=`<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="${SVG_NS}" viewBox="0 0 ${W} ${H}" width="${W}mm" height="${H}mm">\n${body}\n</svg>`;
+      const blob=new Blob([svgContent],{type:'image/svg+xml'});
+      const url=URL.createObjectURL(blob);
+      const previewBody=objs.map(o=>objMarkup(o,false)).join('');
+      const col=depthColor(dep);
+      const cnt=objs.length;
+      return `<div class="layer3d-card">
+        <div class="card-head"><span class="d-badge d${Math.min(dep,6)}" style="background:${col}">W${dep}</span> Warstwa ${dep}</div>
+        <svg viewBox="0 0 ${W} ${H}" xmlns="${SVG_NS}">${previewBody}</svg>
+        <div class="lcount">${cnt} element${cnt===1?'':'ów'}</div>
+        <a href="${url}" download="warstwa-3d-${dep}.svg" class="tbtn" style="font-size:.72rem;text-decoration:none">⬇ Pobierz SVG</a>
+      </div>`;
+    }).join('');
+
+    note.innerHTML=`<strong>Wskazówka do produkcji:</strong><br>
+    • Wytnij każdą warstwę z osobnego arkusza materiału (sklejka, MDF itp.).<br>
+    • Warstwa 1 to podstawa — może być grubsza (np. 6 mm). Kolejne warstwy dają głębię (np. 3 mm każda).<br>
+    • Sklejaj warstwy od dołu do góry: 1 → 2 → 3 … Uzyskasz efekt 3D w zależności od liczby warstw.<br>
+    • Łączna głębokość = suma grubości wszystkich warstw materiału.`;
+
+    document.getElementById('modal3d').classList.add('open');
+  }
+
+  document.getElementById('export3dBtn').addEventListener('click', showExport3D);
+  document.getElementById('modal3dClose').addEventListener('click', ()=>document.getElementById('modal3d').classList.remove('open'));
+  document.getElementById('modal3d').addEventListener('click', e=>{ if(e.target===document.getElementById('modal3d')) document.getElementById('modal3d').classList.remove('open'); });
 
   /* ---------------- Export ---------------- */
   function exportSVG(){
