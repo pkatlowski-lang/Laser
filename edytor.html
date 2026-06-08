@@ -181,7 +181,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
   const state={
     docW:300, docH:200,
     objects:[],
-    selectedId:null,
+    selectedIds:[],
     tool:'select',
     snap:true, grid:10,
     view:{x:-20,y:-20,w:340,h:240},
@@ -342,8 +342,20 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
   function objCenter(o){ const b=objBBox(o); return {x:b.x+b.w/2,y:b.y+b.h/2}; }
 
   function renderOverlay(){
-    const o=getSel();
-    if(!o){ gOverlay.innerHTML=''; return; }
+    if(drag && drag.mode==='marquee') return;                   // marquee rysuje się sam
+    const sel=getSelected();
+    if(sel.length===0){ gOverlay.innerHTML=''; return; }
+    if(sel.length>1){                                           // wiele zaznaczonych: ramki + wspólny prostokąt, bez uchwytów
+      let minx=Infinity,miny=Infinity,maxx=-Infinity,maxy=-Infinity, s='';
+      sel.forEach(o=>{
+        const bb=rotatedBBox(o); minx=Math.min(minx,bb.minx); miny=Math.min(miny,bb.miny); maxx=Math.max(maxx,bb.maxx); maxy=Math.max(maxy,bb.maxy);
+        const b=objBBox(o), c={x:b.x+b.w/2,y:b.y+b.h/2};
+        s+=`<g transform="rotate(${fmt(o.rotation||0)} ${fmt(c.x)} ${fmt(c.y)})"><rect class="sel-box" x="${fmt(b.x)}" y="${fmt(b.y)}" width="${fmt(b.w)}" height="${fmt(b.h)}" style="opacity:.55"/></g>`;
+      });
+      s=`<rect x="${fmt(minx)}" y="${fmt(miny)}" width="${fmt(maxx-minx)}" height="${fmt(maxy-miny)}" fill="none" stroke="#d8a14a" stroke-width="1.6px" vector-effect="non-scaling-stroke"/>`+s;
+      gOverlay.innerHTML=s; return;
+    }
+    const o=sel[0];
     const b=objBBox(o), c={x:b.x+b.w/2,y:b.y+b.h/2};
     const hs=[ ['nw',b.x,b.y],['n',b.x+b.w/2,b.y],['ne',b.x+b.w,b.y],
                ['e',b.x+b.w,b.y+b.h/2],['se',b.x+b.w,b.y+b.h],['s',b.x+b.w/2,b.y+b.h],
@@ -367,8 +379,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
   function renderAll(){ renderObjects(); renderOverlay(); renderLayers(); document.getElementById('hintEmpty').style.display=state.objects.length?'none':''; }
 
   /* ---------------- Selection helpers ---------------- */
-  function getSel(){ return state.objects.find(o=>o.id===state.selectedId)||null; }
-  function select(id){ state.selectedId=id; renderOverlay(); renderLayers(); renderProps(); }
+  function getSelected(){ return state.objects.filter(o=>state.selectedIds.includes(o.id)); }
+  function getSel(){ return state.selectedIds.length===1 ? (state.objects.find(o=>o.id===state.selectedIds[0])||null) : null; }
+  function select(id){ state.selectedIds = id? [id] : []; renderOverlay(); renderLayers(); renderProps(); }
+  function toggleSelection(id){ const i=state.selectedIds.indexOf(id); if(i>=0) state.selectedIds.splice(i,1); else state.selectedIds.push(id); renderOverlay(); renderLayers(); renderProps(); }
+  function rotatedBBox(o){
+    const b=objBBox(o), c={x:b.x+b.w/2,y:b.y+b.h/2}, rot=deg2rad(o.rotation||0);
+    const pts=[[b.x,b.y],[b.x+b.w,b.y],[b.x+b.w,b.y+b.h],[b.x,b.y+b.h]].map(([x,y])=>rotatePt(x,y,c.x,c.y,rot));
+    const xs=pts.map(p=>p.x), ys=pts.map(p=>p.y);
+    return {minx:Math.min(...xs),miny:Math.min(...ys),maxx:Math.max(...xs),maxy:Math.max(...ys)};
+  }
+  function bboxIntersect(a,r){ return a.maxx>=r.x && a.minx<=r.x+r.w && a.maxy>=r.y && a.miny<=r.y+r.h; }
 
   /* ---------------- Coordinate mapping ---------------- */
   function clientToDoc(e){
@@ -392,7 +413,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
   function autoName(o){ return o.name|| (TYPE_NAMES[o.type]||'Kształt'); }
 
   function addObject(o,{commit=true}={}){
-    state.objects.push(o); state.selectedId=o.id;
+    state.objects.push(o); state.selectedIds=[o.id];
     if(commit) pushHistory();
     renderAll(); renderProps();
   }
@@ -420,7 +441,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     c.name='Obwódka';
     const i=state.objects.findIndex(x=>x.id===o.id);
     state.objects.splice(i,0,c);              // wstaw PRZED oryginałem -> rysuje się pod spodem
-    state.selectedId=c.id; pushHistory(); renderAll(); renderProps();
+    state.selectedIds=[c.id]; pushHistory(); renderAll(); renderProps();
   }
 
   /* ---------------- Pointer interactions ---------------- */
@@ -440,11 +461,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
       const grp=e.target.closest && e.target.closest('[data-id]');
       if(grp){
         const id=grp.getAttribute('data-id'); const o=state.objects.find(x=>x.id===id);
-        select(id);
-        if(o && !o.locked) startMove(e,o,docP);
+        if(e.shiftKey){ toggleSelection(id); return; }            // shift+klik = dodaj/odejmij z zaznaczenia
+        if(!state.selectedIds.includes(id)) select(id);           // klik na nowy = zaznacz tylko jego
+        if(o && !o.locked) startMove(e,o,docP); else renderProps();// klik na już-zaznaczony = przesuń całą grupę
         return;
       }
-      select(null); return;                                     // empty click = only deselect (no accidental pan)
+      startMarquee(e,docP);                                       // puste pole = zaznaczanie ramką (nie przesuwa widoku)
+      return;
     }
     // shape tools -> draw
     startDraw(e,docP);
@@ -472,7 +495,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     state.view.w=nw; state.view.h=nh; state.view.x=docX-cfx*nw; state.view.y=docY-cfy*nh;
     applyView(); renderOverlay();
   }
-  function startMove(e,o,docP){ setCapture(e); drag={mode:'move',o,ox:o.x,oy:o.y,sx:docP.x,sy:docP.y}; }
+  function startMove(e,o,docP){
+    setCapture(e);
+    const items=getSelected().filter(s=>!s.locked).map(s=>({o:s,ox:s.x,oy:s.y}));
+    drag={mode:'move', o, items, sx:docP.x, sy:docP.y};
+  }
+  function startMarquee(e,docP){
+    setCapture(e);
+    drag={mode:'marquee', x0:docP.x, y0:docP.y, add:e.shiftKey, base:state.selectedIds.slice()};
+    if(!e.shiftKey){ state.selectedIds=[]; renderLayers(); renderProps(); }
+    gOverlay.innerHTML='';
+  }
   function startDraw(e,docP){
     setCapture(e);
     const o=defaultsFor(state.tool);
@@ -482,7 +515,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
       return;
     }
     o.x=snap(docP.x); o.y=snap(docP.y); o.w=0; o.h=0;
-    state.objects.push(o); state.selectedId=o.id; renderAll();
+    state.objects.push(o); state.selectedIds=[o.id]; renderAll();
     drag={mode:'draw',o,ax:o.x,ay:o.y};
   }
   function startHandle(e,handle,docP){
@@ -504,8 +537,15 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     }
     const docP=clientToDoc(e);
     if(drag.mode==='move'){
-      drag.o.x=snap(drag.ox+(docP.x-drag.sx)); drag.o.y=snap(drag.oy+(docP.y-drag.sy));
+      // snap based on the grabbed (primary) object, apply identical delta to all selected
+      const pit=drag.items.find(it=>it.o===drag.o)||drag.items[0];
+      if(pit){ const dx=snap(pit.ox+(docP.x-drag.sx))-pit.ox, dy=snap(pit.oy+(docP.y-drag.sy))-pit.oy;
+        drag.items.forEach(it=>{ it.o.x=it.ox+dx; it.o.y=it.oy+dy; }); }
       renderObjects(); renderOverlay(); syncPropsLive();
+    } else if(drag.mode==='marquee'){
+      const x=Math.min(drag.x0,docP.x), y=Math.min(drag.y0,docP.y), w=Math.abs(docP.x-drag.x0), h=Math.abs(docP.y-drag.y0);
+      drag.rect={x,y,w,h};
+      gOverlay.innerHTML=`<rect x="${fmt(x)}" y="${fmt(y)}" width="${fmt(w)}" height="${fmt(h)}" fill="rgba(216,161,74,.12)" stroke="#d8a14a" stroke-width="1.2" vector-effect="non-scaling-stroke" stroke-dasharray="4 3"/>`;
     } else if(drag.mode==='draw'){
       const o=drag.o; let x0=drag.ax,y0=drag.ay,x1=snap(docP.x),y1=snap(docP.y);
       if(o.type==='line'){ o.x=x0;o.y=y0;o.w=x1-x0;o.h=y1-y0; }
@@ -527,6 +567,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     if(pinch){ if(pointers.size<2){ pinch=null; drag=null; } return; }
     if(!drag) return;
     if(drag.mode==='pan'){ drag=null; updateCanvasCursor(); return; }
+    if(drag.mode==='marquee'){
+      const r=drag.rect;
+      if(r && (r.w>1.5||r.h>1.5)){
+        const hit=state.objects.filter(o=>o.visible && !o.locked && bboxIntersect(rotatedBBox(o), r)).map(o=>o.id);
+        state.selectedIds = drag.add ? [...new Set([...drag.base, ...hit])] : hit;
+      }
+      drag=null; renderOverlay(); renderLayers(); renderProps(); return;
+    }
     const m=drag.mode, o=drag.o;
     if(m==='draw'){
       if(o.type!=='line' && o.w<2 && o.h<2){ // treated as click -> default size centered
@@ -582,9 +630,53 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
   /* ---------------- Properties panel ---------------- */
   const propsEl=document.getElementById('props');
   function field(label, inner){ return `<div class="field"><label>${label}</label>${inner}</div>`; }
+  /* ---- Wyrównywanie / rozkładanie (działa na zaznaczonej grupie) ---- */
+  function alignSel(mode){
+    const sel=getSelected(); if(sel.length<2) return;
+    const bs=sel.map(o=>({o,bb:rotatedBBox(o)}));
+    const minx=Math.min(...bs.map(b=>b.bb.minx)), maxx=Math.max(...bs.map(b=>b.bb.maxx));
+    const miny=Math.min(...bs.map(b=>b.bb.miny)), maxy=Math.max(...bs.map(b=>b.bb.maxy));
+    bs.forEach(({o,bb})=>{
+      if(mode==='left') o.x += minx-bb.minx;
+      else if(mode==='right') o.x += maxx-bb.maxx;
+      else if(mode==='hcenter') o.x += (minx+maxx)/2-(bb.minx+bb.maxx)/2;
+      else if(mode==='top') o.y += miny-bb.miny;
+      else if(mode==='bottom') o.y += maxy-bb.maxy;
+      else if(mode==='vcenter') o.y += (miny+maxy)/2-(bb.miny+bb.maxy)/2;
+    });
+    pushHistory(); renderAll(); renderProps();
+  }
+  function distributeSel(axis){
+    const sel=getSelected(); if(sel.length<3) return;
+    const bs=sel.map(o=>({o,bb:rotatedBBox(o)}));
+    const cen=b=> axis==='h' ? (b.bb.minx+b.bb.maxx)/2 : (b.bb.miny+b.bb.maxy)/2;
+    bs.sort((a,b)=>cen(a)-cen(b));
+    const c0=cen(bs[0]), c1=cen(bs[bs.length-1]), step=(c1-c0)/(bs.length-1);
+    bs.forEach((b,i)=>{ if(i===0||i===bs.length-1) return; const target=c0+step*i, cur=cen(b);
+      if(axis==='h') b.o.x+=target-cur; else b.o.y+=target-cur; });
+    pushHistory(); renderAll(); renderProps();
+  }
+  function renderMultiProps(sel){
+    let h=`<div class="empty-note" style="padding-bottom:4px">Zaznaczono elementów: <strong style="color:var(--text)">${sel.length}</strong></div>`;
+    h+=`<div class="field"><label>Tryb dla wszystkich</label><div class="seg" data-seg="mmode">
+      <button class="cut" data-mode="cut">Cięcie</button><button class="engrave" data-mode="engrave">Grawer</button><button class="score" data-mode="score">Nacięcie</button></div></div>`;
+    h+=`<div class="field"><label>Wyrównaj w poziomie</label><div class="seg">
+      <button data-align="left">⊣ Lewa</button><button data-align="hcenter">┼ Środek</button><button data-align="right">⊢ Prawa</button></div></div>`;
+    h+=`<div class="field"><label>Wyrównaj w pionie</label><div class="seg">
+      <button data-align="top">⊤ Góra</button><button data-align="vcenter">┼ Środek</button><button data-align="bottom">⊥ Dół</button></div></div>`;
+    if(sel.length>=3) h+=`<div class="field"><label>Rozłóż równomiernie</label><div class="seg">
+      <button data-dist="h">↔ Poziomo</button><button data-dist="v">↕ Pionowo</button></div></div>`;
+    h+=`<div class="empty-note">Przeciągnij dowolny zaznaczony element, aby przesunąć całą grupę. Shift+klik dodaje lub usuwa element z zaznaczenia.</div>`;
+    propsEl.innerHTML=h;
+    propsEl.querySelectorAll('[data-align]').forEach(b=>b.addEventListener('click',()=>alignSel(b.dataset.align)));
+    propsEl.querySelectorAll('[data-dist]').forEach(b=>b.addEventListener('click',()=>distributeSel(b.dataset.dist)));
+    propsEl.querySelectorAll('[data-seg="mmode"] button').forEach(b=>b.addEventListener('click',()=>{ const m=b.dataset.mode; getSelected().forEach(o=>o.mode=m); renderObjects(); renderLayers(); pushHistory(); }));
+  }
   function renderProps(){
+    const selArr=getSelected();
+    if(selArr.length>1){ renderMultiProps(selArr); return; }
     const o=getSel();
-    if(!o){ propsEl.innerHTML=`<div class="empty-note">Nic nie zaznaczono.<br><br>Wybierz narzędzie u góry i narysuj kształt na płycie, albo kliknij gotowy szablon po lewej. Potem zaznacz element, aby zmieniać jego rozmiar, obrót, tryb (cięcie / grawer / nacięcie) i powielanie.</div>`; return; }
+    if(!o){ propsEl.innerHTML=`<div class="empty-note">Nic nie zaznaczono.<br><br>Wybierz narzędzie u góry i narysuj kształt na płycie, albo kliknij gotowy szablon po lewej. Potem zaznacz element, aby zmieniać jego rozmiar, obrót, tryb (cięcie / grawer / nacięcie) i powielanie.<br><br>Aby zaznaczyć kilka elementów naraz: trzymaj <strong>Shift</strong> i klikaj, albo zaznacz je <strong>ramką</strong> na pustym polu.</div>`; return; }
     let h='';
     // mode
     h+=`<div class="field"><label>Tryb (operacja lasera)</label><div class="seg" data-seg="mode">
@@ -694,7 +786,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     if(!state.objects.length){ layersEl.innerHTML=`<div style="padding:4px 6px;font-size:.78rem;color:var(--muted)">Brak elementów.</div>`; return; }
     layersEl.innerHTML=state.objects.slice().reverse().map(o=>{
       const sw=o.mode==='engrave'?'sw-engrave':o.mode==='score'?'sw-score':'sw-cut';
-      return `<div class="layer ${o.id===state.selectedId?'sel':''}" data-id="${o.id}">
+      return `<div class="layer ${state.selectedIds.includes(o.id)?'sel':''}" data-id="${o.id}">
         <span class="swatch ${sw}"></span>
         <span class="lname">${escapeXml(autoName(o))}</span>
         <button class="lico" data-act="up" title="Wyżej">▲</button>
@@ -718,19 +810,19 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     else if(act==='down'){ if(i>0){ state.objects.splice(i,1); state.objects.splice(i-1,0,o); pushHistory(); } }
     else if(act==='vis'){ o.visible=!o.visible; pushHistory(); }
     else if(act==='lock'){ o.locked=!o.locked; pushHistory(); }
-    else if(act==='del'){ state.objects.splice(i,1); if(state.selectedId===id) state.selectedId=null; pushHistory(); }
+    else if(act==='del'){ state.objects.splice(i,1); state.selectedIds=state.selectedIds.filter(x=>x!==id); pushHistory(); }
     renderAll(); renderProps();
   }
 
   /* ---------------- History ---------------- */
-  function snapshot(){ return JSON.stringify({objects:state.objects,selectedId:state.selectedId}); }
+  function snapshot(){ return JSON.stringify({objects:state.objects,selectedIds:state.selectedIds}); }
   function pushHistory(){
     state.history=state.history.slice(0,state.hIndex+1);
     state.history.push(snapshot()); state.hIndex=state.history.length-1;
     if(state.history.length>120){ state.history.shift(); state.hIndex--; }
     updateUndoButtons();
   }
-  function restore(s){ const d=JSON.parse(s); state.objects=d.objects; state.selectedId=d.selectedId; renderAll(); renderProps(); }
+  function restore(s){ const d=JSON.parse(s); state.objects=d.objects; state.selectedIds=d.selectedIds||(d.selectedId?[d.selectedId]:[]); renderAll(); renderProps(); }
   function undo(){ if(state.hIndex>0){ state.hIndex--; restore(state.history[state.hIndex]); updateUndoButtons(); } }
   function redo(){ if(state.hIndex<state.history.length-1){ state.hIndex++; restore(state.history[state.hIndex]); updateUndoButtons(); } }
   function updateUndoButtons(){ document.getElementById('undoBtn').disabled=state.hIndex<=0; document.getElementById('redoBtn').disabled=state.hIndex>=state.history.length-1; }
@@ -758,8 +850,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
   snapBtn.addEventListener('click',()=>{ state.snap=!state.snap; snapBtn.classList.toggle('active',state.snap); });
   document.getElementById('exportBtn').addEventListener('click',exportSVG);
 
-  function duplicateSel(){ const o=getSel(); if(!o) return; const c=JSON.parse(JSON.stringify(o)); c.id=uid(); c.x+=10; c.y+=10; c.name=''; state.objects.push(c); state.selectedId=c.id; pushHistory(); renderAll(); renderProps(); }
-  function deleteSel(){ const o=getSel(); if(!o) return; const i=state.objects.findIndex(x=>x.id===o.id); state.objects.splice(i,1); state.selectedId=null; pushHistory(); renderAll(); renderProps(); }
+  function duplicateSel(){ const sel=getSelected(); if(!sel.length) return;
+    const copies=sel.map(o=>{ const c=JSON.parse(JSON.stringify(o)); c.id=uid(); c.x+=10; c.y+=10; c.name=''; return c; });
+    state.objects.push(...copies); state.selectedIds=copies.map(c=>c.id); pushHistory(); renderAll(); renderProps(); }
+  function deleteSel(){ const ids=state.selectedIds.slice(); if(!ids.length) return;
+    state.objects=state.objects.filter(o=>!ids.includes(o.id)); state.selectedIds=[]; pushHistory(); renderAll(); renderProps(); }
   function zoomBy(f){ const r=canvasRect(); const aspect=(r.width&&r.height)?r.width/r.height:state.view.w/state.view.h;
     const v=state.view; const cx=v.x+v.w/2, cy=v.y+v.h/2;
     v.w=clamp(v.w*f,20,4000); v.h=v.w/aspect; v.x=cx-v.w/2; v.y=cy-v.h/2; applyView(); renderOverlay(); }
@@ -781,14 +876,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='d'){ e.preventDefault(); duplicateSel(); return; }
     if(typing) return;
     if(e.key==='Delete'||e.key==='Backspace'){ e.preventDefault(); deleteSel(); return; }
-    const sel=getSel();
-    if(sel && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){
+    const selArr=getSelected();
+    if(selArr.length && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){
       e.preventDefault(); const step=e.shiftKey?state.grid:1;
-      if(e.key==='ArrowUp') sel.y-=step; if(e.key==='ArrowDown') sel.y+=step;
-      if(e.key==='ArrowLeft') sel.x-=step; if(e.key==='ArrowRight') sel.x+=step;
+      let dx=0,dy=0; if(e.key==='ArrowUp')dy=-step; if(e.key==='ArrowDown')dy=step; if(e.key==='ArrowLeft')dx=-step; if(e.key==='ArrowRight')dx=step;
+      selArr.forEach(o=>{ o.x+=dx; o.y+=dy; });
       renderObjects(); renderOverlay(); syncPropsLive(); pushHistory(); return;
     }
-    const map={v:'select',r:'rect',o:'ellipse',p:'polygon',s:'star',l:'line',t:'text'};
+    const map={v:'select',h:'pan',r:'rect',o:'ellipse',p:'polygon',s:'star',l:'line',t:'text'};
     if(map[e.key.toLowerCase()]){ state.tool=map[e.key.toLowerCase()]; syncToolButtons(); }
   });
 
@@ -834,7 +929,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
   ];
   const tplEl=document.getElementById('templates');
   TEMPLATES.forEach(t=>{ const b=document.createElement('button'); b.textContent=t.label; b.addEventListener('click',()=>{
-    const objs=t.build(); objs.forEach(o=>{o.id=uid();}); state.objects.push(...objs); state.selectedId=objs[objs.length-1].id;
+    const objs=t.build(); objs.forEach(o=>{o.id=uid();}); state.objects.push(...objs); state.selectedIds=[objs[objs.length-1].id];
     pushHistory(); renderAll(); renderProps(); zoomFit();
   }); tplEl.appendChild(b); });
 
