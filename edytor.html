@@ -87,6 +87,22 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 .layer .swatch{width:11px;height:11px;border-radius:3px;flex:0 0 auto}
 .sw-cut{background:var(--cut)} .sw-engrave{background:var(--engrave);border:1px solid #555} .sw-score{background:var(--score)}
 
+/* ---- Parameters (parametry globalne) ---- */
+.params{display:flex;flex-direction:column;gap:8px;padding:0 14px 12px}
+.param-card{background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:9px 10px}
+.param-card .prow{display:flex;gap:6px;align-items:center}
+.param-card .prow+.prow{margin-top:6px}
+.param-card input[type=text]{flex:1;min-width:0;padding:6px 8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--accent);font-weight:700;font-size:.8rem;font-family:inherit}
+.param-card input[type=number]{width:58px;flex:0 0 auto;padding:6px 5px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:.78rem;font-family:inherit;text-align:center}
+.param-card input[type=range]{flex:1;accent-color:var(--accent)}
+.param-card .ptag{font-size:.66rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;flex:0 0 auto}
+.param-card .pdel{flex:0 0 auto;background:none;border:none;color:var(--muted);cursor:pointer;font-size:.95rem;padding:3px 6px;border-radius:5px;line-height:1}
+.param-card .pdel:hover{color:var(--cut);background:rgba(255,255,255,.08)}
+.addparam{margin:0 14px 16px;width:calc(100% - 28px);justify-content:center}
+.bind-sel{margin-top:6px;width:100%;padding:6px 8px;background:var(--surface2);border:1px dashed var(--border);border-radius:6px;color:var(--accent);font-size:.7rem;font-family:inherit;cursor:pointer}
+.bind-sel:focus{outline:none;border-color:var(--accent)}
+.params-empty{padding:2px 2px 6px;font-size:.78rem;color:var(--muted);line-height:1.55}
+
 /* ---- Templates ---- */
 .tpl{display:grid;grid-template-columns:1fr 1fr;gap:7px;padding:0 14px 16px}
 .tpl button{padding:9px 6px;border-radius:7px;border:1.5px solid var(--border);background:var(--surface2);color:var(--text);font-size:.76rem;font-weight:600;cursor:pointer}
@@ -135,6 +151,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 
   <div class="main">
     <aside class="panel left">
+      <h2>Parametry globalne</h2>
+      <div class="params" id="params"></div>
+      <button type="button" class="tbtn addparam" id="addParamBtn">+ Dodaj parametr</button>
       <h2>Szablony startowe</h2>
       <div class="tpl" id="templates"></div>
       <h2>Warstwy</h2>
@@ -172,6 +191,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 
   function fmt(n){ return Number(Number(n).toFixed(3)); }
   function uid(){ return 'o'+Math.random().toString(36).slice(2,9); }
+  function puid(){ return 'p'+Math.random().toString(36).slice(2,8); }
   function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
   function deg2rad(d){ return d*Math.PI/180; }
   function rotatePt(px,py,cx,cy,ang){ const s=Math.sin(ang),c=Math.cos(ang),dx=px-cx,dy=py-cy; return {x:cx+dx*c-dy*s,y:cy+dx*s+dy*c}; }
@@ -186,6 +206,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     snap:true, grid:10,
     penDraft:null, penPreview:null,
     view:{x:-20,y:-20,w:340,h:240},
+    params:[{id:'p_grubosc',name:'grubość_materiału',value:3,min:1,max:12,step:0.5}],
     history:[], hIndex:-1
   };
 
@@ -862,24 +883,24 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
       <button class="score ${o.mode==='score'?'on':''}" data-mode="score">Nacięcie</button></div></div>`;
     // position/size
     if(o.type==='text'||o.type==='path'){
-      h+=`<div class="field"><label>Przesunięcie X / Y (mm)</label><div class="row2">
-        <input type="number" data-prop="x" value="${fmt(o.x)}" step="1"><input type="number" data-prop="y" value="${fmt(o.y)}" step="1"></div></div>`;
+      h+=numField('Przesunięcie X (mm)','x',o,{step:1});
+      h+=numField('Przesunięcie Y (mm)','y',o,{step:1});
     } else {
-      h+=`<div class="field"><label>Pozycja X / Y (mm)</label><div class="row2">
-        <input type="number" data-prop="x" value="${fmt(o.x)}" step="1"><input type="number" data-prop="y" value="${fmt(o.y)}" step="1"></div></div>`;
-      h+=`<div class="field"><label>Szerokość / Wysokość (mm)</label><div class="row2">
-        <input type="number" data-prop="w" value="${fmt(o.w)}" step="1" min="1"><input type="number" data-prop="h" value="${fmt(o.h)}" step="1" min="1"></div></div>`;
+      h+=numField('Pozycja X (mm)','x',o,{step:1});
+      h+=numField('Pozycja Y (mm)','y',o,{step:1});
+      h+=numField('Szerokość (mm)','w',o,{step:1,min:1});
+      h+=numField('Wysokość (mm)','h',o,{step:1,min:1});
     }
-    h+=rangeField('Obrót (°)','rotation',o.rotation||0,0,360,1);
+    h+=rangeField('Obrót (°)','rotation',o.rotation||0,0,360,1,o);
     // type-specific
-    if(o.type==='rect') h+=rangeField('Zaokrąglenie rogów (mm)','rx',o.rx||0,0,Math.min(o.w,o.h)/2,1);
-    if(o.type==='polygon') h+=rangeField('Liczba boków','sides',o.sides||6,3,16,1);
-    if(o.type==='star'){ h+=rangeField('Liczba ramion','points',o.points||5,3,16,1); h+=rangeField('Wcięcie ramion','inner',o.inner||0.5,0.05,0.95,0.01); }
+    if(o.type==='rect') h+=rangeField('Zaokrąglenie rogów (mm)','rx',o.rx||0,0,Math.min(o.w,o.h)/2,1,o);
+    if(o.type==='polygon') h+=rangeField('Liczba boków','sides',o.sides||6,3,16,1,o);
+    if(o.type==='star'){ h+=rangeField('Liczba ramion','points',o.points||5,3,16,1,o); h+=rangeField('Wcięcie ramion','inner',o.inner||0.5,0.05,0.95,0.01,o); }
     if(o.type==='line') h+=`<div class="field"><label>Kierunek</label><div class="seg" data-seg="flip"><button class="${!o.flip?'on':''}" data-flip="0">↘ ukośna</button><button class="${o.flip?'on':''}" data-flip="1">↗ ukośna</button></div></div>`;
     if(o.type==='text'){
       h+=`<div class="field"><label>Treść napisu</label><input type="text" data-prop="text" value="${escapeXml(o.text||'')}" maxlength="80"></div>`;
       h+=`<div class="field"><label>Czcionka</label><select data-prop="font">${FONTS.map(([v,l])=>`<option value='${v}' ${v===o.font?'selected':''}>${l}</option>`).join('')}</select></div>`;
-      h+=rangeField('Wielkość (mm)','fontSize',o.fontSize||24,4,160,1);
+      h+=rangeField('Wielkość (mm)','fontSize',o.fontSize||24,4,160,1,o);
     }
     // repeat modifier
     const r=o.repeat||{type:'none'};
@@ -912,10 +933,33 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     propsEl.innerHTML=h;
     bindProps();
   }
-  function rangeField(label,prop,val,min,max,step){
+  function rangeField(label,prop,val,min,max,step,o){
+    const bound=o&&isBound(o,prop);
+    const v=bound? boundVal(o,prop) : val;
     return `<div class="field"><label>${label}</label><div class="range-wrap">
-      <input type="range" data-prop="${prop}" min="${min}" max="${max}" step="${step}" value="${val}">
-      <span class="range-val" data-out="${prop}">${fmt(val)}</span></div></div>`;
+      <input type="range" data-prop="${prop}" min="${min}" max="${max}" step="${step}" value="${v}"${bound?' disabled':''}>
+      <span class="range-val" data-out="${prop}">${fmt(v)}</span></div>
+      ${o?bindSelectHtml(o,prop):''}</div>`;
+  }
+  function numField(label,prop,o,opts){
+    opts=opts||{};
+    const bound=isBound(o,prop);
+    const v=bound? boundVal(o,prop) : o[prop];
+    const minAttr=opts.min!=null?` min="${opts.min}"`:'';
+    return `<div class="field"><label>${label}</label>
+      <input type="number" data-prop="${prop}" value="${fmt(v)}" step="${opts.step||1}"${minAttr}${bound?' disabled':''}>
+      ${bindSelectHtml(o,prop)}</div>`;
+  }
+  /* ---- Powiązanie wartości elementu z parametrem globalnym (jak Parameters w Cuttle) ---- */
+  function isBound(o,prop){ return !!(o.bindings && o.bindings[prop] && state.params.some(p=>p.id===o.bindings[prop])); }
+  function boundVal(o,prop){ const p=state.params.find(x=>x.id===o.bindings[prop]); return p?p.value:o[prop]; }
+  function bindSelectHtml(o,prop){
+    if(!state.params.length) return '';
+    const bound=(o.bindings&&o.bindings[prop])||'';
+    return `<select class="bind-sel" data-bind="${prop}" title="Połącz tę wartość z parametrem globalnym — zmiana suwaka parametru będzie ją automatycznie zmieniać">
+      <option value="">🔗 brak powiązania — wartość stała</option>
+      ${state.params.map(p=>`<option value="${p.id}" ${bound===p.id?'selected':''}>🔗 powiąż z: ${escapeXml(p.name)}</option>`).join('')}
+    </select>`;
   }
   function setProp(o,path,val){
     if(path.startsWith('repeat.')){ o.repeat=o.repeat||{type:'none'}; o.repeat[path.slice(7)]=val; }
@@ -936,6 +980,16 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
         if(ev==='change') pushHistory();
       });
       if(inp.type==='range'){ inp.addEventListener('change',()=>pushHistory()); }
+    });
+    propsEl.querySelectorAll('[data-bind]').forEach(sel=>{
+      const prop=sel.getAttribute('data-bind');
+      sel.addEventListener('change',()=>{
+        const val=sel.value;
+        o.bindings=o.bindings||{};
+        if(val){ o.bindings[prop]=val; setProp(o,prop,boundVal(o,prop)); }
+        else delete o.bindings[prop];
+        renderProps(); renderObjects(); renderOverlay(); pushHistory();
+      });
     });
     propsEl.querySelectorAll('[data-seg="mode"] button').forEach(b=>b.addEventListener('click',()=>{ o.mode=b.getAttribute('data-mode'); renderProps(); renderObjects(); pushHistory(); }));
     propsEl.querySelectorAll('[data-seg="flip"] button').forEach(b=>b.addEventListener('click',()=>{ o.flip=b.getAttribute('data-flip')==='1'; renderProps(); renderObjects(); pushHistory(); }));
@@ -961,6 +1015,90 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
       const out=propsEl.querySelector(`[data-out="${p}"]`); if(out) out.textContent=fmt(v);
     });
   }
+
+  /* ---------------- Parametry globalne (jak Parameters w Cuttle) ----------------
+     Liczby sterujące całym projektem — można je powiązać 🔗 z dowolną wartością
+     elementu (pozycja, rozmiar, obrót, liczba boków...). Zmiana suwaka parametru
+     natychmiast aktualizuje "na żywo" wszystkie powiązane elementy naraz. */
+  const paramsEl=document.getElementById('params');
+  function renderParams(){
+    if(!state.params.length){
+      paramsEl.innerHTML=`<div class="params-empty">Brak parametrów. Dodaj parametr (np. „grubość materiału” albo „rozmiar”), a potem w panelu właściwości elementu wybierz 🔗 powiązanie z nim — odtąd jeden suwak będzie sterował całym projektem naraz, tak jak Parameters w Cuttle.</div>`;
+      return;
+    }
+    paramsEl.innerHTML=state.params.map(p=>`
+      <div class="param-card" data-id="${p.id}">
+        <div class="prow">
+          <input type="text" data-pf="name" value="${escapeXml(p.name)}" maxlength="28" title="Nazwa parametru">
+          <button type="button" class="pdel" data-pf="del" title="Usuń parametr">✕</button>
+        </div>
+        <div class="prow">
+          <input type="range" data-pf="value" min="${fmt(p.min)}" max="${fmt(p.max)}" step="${fmt(p.step||0.1)}" value="${fmt(p.value)}">
+          <input type="number" data-pf="value" value="${fmt(p.value)}" step="${fmt(p.step||0.1)}">
+        </div>
+        <div class="prow">
+          <span class="ptag">zakres</span>
+          <input type="number" data-pf="min" value="${fmt(p.min)}" step="${fmt(p.step||0.1)}" title="Minimum">
+          <input type="number" data-pf="max" value="${fmt(p.max)}" step="${fmt(p.step||0.1)}" title="Maksimum">
+        </div>
+      </div>`).join('');
+    paramsEl.querySelectorAll('.param-card').forEach(card=>{
+      const id=card.getAttribute('data-id'), p=state.params.find(x=>x.id===id);
+      if(!p) return;
+      card.querySelectorAll('[data-pf]').forEach(inp=>{
+        const f=inp.getAttribute('data-pf');
+        if(f==='del'){ inp.addEventListener('click',()=>deleteParam(id)); return; }
+        const live = (f==='value');
+        inp.addEventListener(live?'input':'change', ()=>{
+          if(f==='name'){ p.name=inp.value.trim()||p.name; renderProps(); return; }
+          let v=Number(inp.value);
+          if(f==='min'){ p.min=v; if(p.max<p.min) p.max=p.min; if(p.value<p.min) p.value=p.min; }
+          else if(f==='max'){ p.max=v; if(p.min>p.max) p.min=p.max; if(p.value>p.max) p.value=p.max; }
+          else if(f==='value'){ p.value=clamp(v,p.min,p.max); }
+          if(f==='value'){
+            card.querySelectorAll('[data-pf="value"]').forEach(other=>{ if(other!==inp) other.value=fmt(p.value); });
+          } else {
+            const rng=card.querySelector('input[type=range]'); rng.min=fmt(p.min); rng.max=fmt(p.max); rng.value=fmt(p.value);
+            card.querySelectorAll('[data-pf="value"]').forEach(o2=>o2.value=fmt(p.value));
+          }
+          applyParamBindings();
+        });
+        inp.addEventListener('change',()=>pushHistory());
+      });
+    });
+  }
+  function addParam(){
+    const n=state.params.length+1;
+    state.params.push({id:puid(), name:'parametr_'+n, value:10, min:0, max:100, step:1});
+    renderParams(); renderProps(); pushHistory();
+  }
+  function deleteParam(id){
+    state.params=state.params.filter(p=>p.id!==id);
+    state.objects.forEach(o=>{ if(o.bindings){ Object.keys(o.bindings).forEach(k=>{ if(o.bindings[k]===id) delete o.bindings[k]; }); } });
+    renderParams(); renderProps(); renderObjects(); renderOverlay(); pushHistory();
+  }
+  // Zastosuj aktualne wartości parametrów do wszystkich powiązanych właściwości — "na żywo".
+  function applyParamBindings(){
+    let changed=false;
+    state.objects.forEach(o=>{
+      if(!o.bindings) return;
+      for(const prop in o.bindings){
+        const p=state.params.find(x=>x.id===o.bindings[prop]); if(!p) continue;
+        setProp(o,prop,p.value); changed=true;
+      }
+    });
+    if(changed){ renderObjects(); renderOverlay(); syncBoundPropsLive(); }
+  }
+  // odśwież wyświetlane wartości pól powiązanych z parametrem (bez przebudowy całego panelu)
+  function syncBoundPropsLive(){
+    const o=getSel(); if(!o||!o.bindings) return;
+    for(const prop in o.bindings){
+      const p=state.params.find(x=>x.id===o.bindings[prop]); if(!p) continue;
+      const inp=propsEl.querySelector(`[data-prop="${CSS.escape(prop)}"]`); if(inp) inp.value=fmt(p.value);
+      const out=propsEl.querySelector(`[data-out="${CSS.escape(prop)}"]`); if(out) out.textContent=fmt(p.value);
+    }
+  }
+  document.getElementById('addParamBtn').addEventListener('click',addParam);
 
   /* ---------------- Layers panel ---------------- */
   const layersEl=document.getElementById('layers');
@@ -1118,7 +1256,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
   }); tplEl.appendChild(b); });
 
   /* ---------------- Init ---------------- */
-  buildCanvasSkeleton(); syncViewAspect(); zoomFit(); renderGrid(); renderAll(); renderProps();
+  buildCanvasSkeleton(); syncViewAspect(); zoomFit(); renderGrid(); renderAll(); renderProps(); renderParams();
   updateCanvasCursor();
   pushHistory();
   window.addEventListener('resize',()=>{ syncViewAspect(); applyView(); renderOverlay(); });
