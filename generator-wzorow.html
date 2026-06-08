@@ -237,6 +237,40 @@ select:focus,input[type=text]:focus{outline:none;border-color:var(--accent)}
   }
   const TEMPLATE_BUILDERS={medallion:buildMedallion, plaque:buildPlaque, ornamentStar:buildStarOrnament, ornamentHex:buildHexOrnament};
 
+  /* ---------- "Własna baza": wgrywasz swój projekt SVG, wskazujesz miejsce na nim, a program dodaje tam napis ---------- */
+  const OWN_BASE_FONTS=[
+    ['"Playfair Display", serif','Playfair Display'],
+    ['"Dancing Script", cursive','Dancing Script'],
+    ['"Great Vibes", cursive','Great Vibes'],
+    ['"Montserrat", sans-serif','Montserrat'],
+    ['"Inter", sans-serif','Inter']
+  ];
+  function parseBaseSvg(text){
+    const doc=new DOMParser().parseFromString(text, 'image/svg+xml');
+    const svg=doc.documentElement;
+    if(!svg || svg.nodeName.toLowerCase()!=='svg' || svg.querySelector('parsererror')) return null;
+    let w=0, h=0;
+    const vb=svg.getAttribute('viewBox');
+    if(vb){
+      const parts=vb.trim().split(/[\s,]+/).map(Number);
+      w=parts[2]; h=parts[3];
+    }
+    if(!w || !h){
+      w=parseFloat(svg.getAttribute('width'))||w;
+      h=parseFloat(svg.getAttribute('height'))||h;
+    }
+    if(!w || !h){ w=w||200; h=h||200; }
+    return { inner:svg.innerHTML, width:w, height:h };
+  }
+  function screenToCanvasPoint(evt){
+    const pt=canvas.createSVGPoint();
+    pt.x=evt.clientX; pt.y=evt.clientY;
+    const ctm=canvas.getScreenCTM();
+    if(!ctm) return null;
+    const p=pt.matrixTransform(ctm.inverse());
+    return {x:p.x, y:p.y};
+  }
+
   function genPersonalizedProject(word){
     const clean=word.trim();
     const seed=hashString(clean.toLowerCase());
@@ -384,11 +418,14 @@ select:focus,input[type=text]:focus{outline:none;border-color:var(--accent)}
     }
   };
 
-  const TAB_ORDER=['auto', ...Object.keys(PATTERNS)];
-  const TAB_LABELS={auto:'✨ Z hasła', ...Object.fromEntries(Object.keys(PATTERNS).map(k=>[k, PATTERNS[k].label]))};
+  const TAB_ORDER=['auto', 'ownBase', ...Object.keys(PATTERNS)];
+  const TAB_LABELS={auto:'✨ Z hasła', ownBase:'📍 Własna baza + napis', ...Object.fromEntries(Object.keys(PATTERNS).map(k=>[k, PATTERNS[k].label]))};
 
   let currentPattern='auto';
-  const values={ auto:{ word:'', result:null } };
+  const values={
+    auto:{ word:'', result:null },
+    ownBase:{ fileName:'', base:null, marker:null, text:'', font:OWN_BASE_FONTS[0][0], fontSize:20, mode:'engrave' }
+  };
   function initValues(key){ const v={}; PATTERNS[key].params.forEach(prm=>{ v[prm.key]=prm.default; }); return v; }
 
   const tabsEl=document.getElementById('tabs');
@@ -436,6 +473,115 @@ select:focus,input[type=text]:focus{outline:none;border-color:var(--accent)}
       const hint=document.createElement('p');
       hint.style.cssText='font-size:.8rem;color:var(--muted);line-height:1.6;margin-top:2px';
       hint.textContent='Generator sam dobiera kształt, ozdobny motyw i czcionkę na podstawie wpisanego tekstu — to samo słowo zawsze da ten sam projekt, a inne słowo inną kompozycję. Rozpoznaje też tematy: święta, ślub, urodziny, zima, kwiaty… Najlepiej sprawdzają się krótkie słowa i imiona.';
+      controlsEl.appendChild(hint);
+      return;
+    }
+
+    if(currentPattern==='ownBase'){
+      const v=values.ownBase;
+
+      const fileGroup=document.createElement('div'); fileGroup.className='ctrl-group';
+      const fileLabel=document.createElement('label'); fileLabel.textContent='Wgraj swoją bazę projektu (plik SVG)';
+      fileGroup.appendChild(fileLabel);
+      const fileInput=document.createElement('input'); fileInput.type='file'; fileInput.accept='.svg,image/svg+xml';
+      fileInput.style.cssText='width:100%;padding:9px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:.82rem';
+      fileInput.addEventListener('change', ()=>{
+        const file=fileInput.files && fileInput.files[0];
+        if(!file) return;
+        const reader=new FileReader();
+        reader.onload=()=>{
+          const parsed=parseBaseSvg(String(reader.result));
+          if(!parsed){ alert('Nie udało się odczytać pliku — sprawdź, czy to poprawny plik SVG.'); return; }
+          v.fileName=file.name; v.base=parsed; v.marker=null;
+          renderControls(); regenerate();
+        };
+        reader.readAsText(file);
+      });
+      fileGroup.appendChild(fileInput);
+      if(v.fileName && v.base){
+        const info=document.createElement('p');
+        info.style.cssText='font-size:.78rem;color:var(--muted);margin-top:8px';
+        info.textContent=`Wczytano: ${v.fileName} — ${fmt(v.base.width)} × ${fmt(v.base.height)} mm`;
+        fileGroup.appendChild(info);
+      }
+      controlsEl.appendChild(fileGroup);
+
+      if(!v.base){
+        const hint=document.createElement('p');
+        hint.style.cssText='font-size:.8rem;color:var(--muted);line-height:1.6';
+        hint.textContent='Wgraj plik SVG ze swoją bazą projektu (np. kształt podkładki, breloczka, tabliczki, zawieszki). Potem kliknij w podglądzie miejsce, gdzie ma się pojawić napis, wpisz jego treść — program doda go automatycznie dokładnie tam, gdzie wskażesz.';
+        controlsEl.appendChild(hint);
+        return;
+      }
+
+      const posGroup=document.createElement('div'); posGroup.className='ctrl-group';
+      const posLabel=document.createElement('label'); posLabel.textContent='Miejsce napisu na bazie';
+      posGroup.appendChild(posLabel);
+      const posInfo=document.createElement('p');
+      posInfo.style.cssText='font-size:.82rem;color:var(--text);line-height:1.5';
+      posInfo.textContent=v.marker
+        ? `Wybrano miejsce: x = ${fmt(v.marker.x)} mm, y = ${fmt(v.marker.y)} mm. Kliknij ponownie w podglądzie, aby je zmienić.`
+        : 'Kliknij w podgląd projektu po prawej, aby wskazać miejsce napisu.';
+      posGroup.appendChild(posInfo);
+      if(v.marker){
+        const clearBtn=document.createElement('button');
+        clearBtn.type='button'; clearBtn.className='tab'; clearBtn.style.marginTop='10px';
+        clearBtn.textContent='Usuń wskazane miejsce';
+        clearBtn.addEventListener('click', ()=>{ v.marker=null; renderControls(); regenerate(); });
+        posGroup.appendChild(clearBtn);
+      }
+      controlsEl.appendChild(posGroup);
+
+      const textGroup=document.createElement('div'); textGroup.className='ctrl-group';
+      const textLabel=document.createElement('label'); textLabel.textContent='Treść napisu';
+      textGroup.appendChild(textLabel);
+      const textInput=document.createElement('input'); textInput.type='text'; textInput.maxLength=60;
+      textInput.placeholder='np. Anna, Rodzina Kowalskich…'; textInput.value=v.text;
+      textInput.addEventListener('input', ()=>{ v.text=textInput.value; regenerate(); });
+      textGroup.appendChild(textInput);
+      controlsEl.appendChild(textGroup);
+
+      const fontGroup=document.createElement('div'); fontGroup.className='ctrl-group';
+      const fontLabel=document.createElement('label'); fontLabel.textContent='Czcionka';
+      fontGroup.appendChild(fontLabel);
+      const fontSelect=document.createElement('select');
+      OWN_BASE_FONTS.forEach(([val,lab])=>{
+        const o=document.createElement('option'); o.value=val; o.textContent=lab;
+        if(val===v.font) o.selected=true;
+        fontSelect.appendChild(o);
+      });
+      fontSelect.addEventListener('change', ()=>{ v.font=fontSelect.value; regenerate(); });
+      fontGroup.appendChild(fontSelect);
+      controlsEl.appendChild(fontGroup);
+
+      const sizeGroup=document.createElement('div'); sizeGroup.className='ctrl-group';
+      const sizeLabel=document.createElement('label'); sizeLabel.textContent='Wielkość czcionki (mm)';
+      sizeGroup.appendChild(sizeLabel);
+      const sizeWrap=document.createElement('div'); sizeWrap.className='range-wrap';
+      const sizeInput=document.createElement('input'); sizeInput.type='range';
+      sizeInput.min=4; sizeInput.max=Math.max(12, Math.round(Math.max(v.base.width, v.base.height)*0.5)); sizeInput.step=1; sizeInput.value=v.fontSize;
+      const sizeOut=document.createElement('span'); sizeOut.className='range-val'; sizeOut.textContent=v.fontSize;
+      sizeInput.addEventListener('input', ()=>{ v.fontSize=Number(sizeInput.value); sizeOut.textContent=sizeInput.value; regenerate(); });
+      sizeWrap.appendChild(sizeInput); sizeWrap.appendChild(sizeOut);
+      sizeGroup.appendChild(sizeWrap);
+      controlsEl.appendChild(sizeGroup);
+
+      const modeGroup=document.createElement('div'); modeGroup.className='ctrl-group';
+      const modeLabel=document.createElement('label'); modeLabel.textContent='Tryb napisu';
+      modeGroup.appendChild(modeLabel);
+      const modeSelect=document.createElement('select');
+      [['engrave','Grawerowanie (wypełnienie)'],['cut','Wycinanie (kontur)']].forEach(([val,lab])=>{
+        const o=document.createElement('option'); o.value=val; o.textContent=lab;
+        if(val===v.mode) o.selected=true;
+        modeSelect.appendChild(o);
+      });
+      modeSelect.addEventListener('change', ()=>{ v.mode=modeSelect.value; regenerate(); });
+      modeGroup.appendChild(modeSelect);
+      controlsEl.appendChild(modeGroup);
+
+      const hint=document.createElement('p');
+      hint.style.cssText='font-size:.8rem;color:var(--muted);line-height:1.6;margin-top:2px';
+      hint.textContent='Niebieski znacznik (celownik) widoczny w podglądzie pokazuje wskazane miejsce — pojawia się tylko na ekranie i nie trafia do pobieranego pliku SVG.';
       controlsEl.appendChild(hint);
       return;
     }
@@ -503,8 +649,63 @@ select:focus,input[type=text]:focus{outline:none;border-color:var(--accent)}
     catch(e){ return 0; }
   }
 
+  let exportOverride=null;
+
+  function renderOwnBase(){
+    const v=values.ownBase;
+    canvas.style.cursor = v.base ? 'crosshair' : 'default';
+
+    if(!v.base){
+      canvas.removeAttribute('width'); canvas.removeAttribute('height');
+      canvas.setAttribute('viewBox','0 0 220 220');
+      canvas.innerHTML=`<text x="110" y="114" text-anchor="middle" font-family="Inter, sans-serif" font-size="9" fill="#a8967c">Wgraj plik SVG ze swoją bazą projektu</text>`;
+      metaEl.innerHTML='';
+      canvas.dataset.svgWidth=''; canvas.dataset.svgHeight='';
+      return;
+    }
+
+    const {inner, width:vbW, height:vbH}=v.base;
+    canvas.setAttribute('viewBox', `0 0 ${vbW} ${vbH}`);
+    canvas.setAttribute('width', vbW+'mm');
+    canvas.setAttribute('height', vbH+'mm');
+
+    const strokeWidth=fmt(Math.max(vbW,vbH)*0.0025);
+    const text=v.text.trim();
+    let textMarkup='';
+    if(v.marker && text){
+      textMarkup=elementToMarkup({type:'text', x:v.marker.x, y:v.marker.y+v.fontSize*0.34, anchor:'middle', content:text, fontFamily:v.font, fontSize:v.fontSize, mode:v.mode}, strokeWidth);
+    }
+    let markerMarkup='';
+    if(v.marker){
+      const r=Math.max(vbW,vbH)*0.014, lw=fmt(Math.max(vbW,vbH)*0.003);
+      markerMarkup=`<g stroke="#2f7bd8" stroke-width="${lw}" fill="none" vector-effect="non-scaling-stroke">`+
+        `<circle cx="${fmt(v.marker.x)}" cy="${fmt(v.marker.y)}" r="${fmt(r)}"/>`+
+        `<line x1="${fmt(v.marker.x-r*1.7)}" y1="${fmt(v.marker.y)}" x2="${fmt(v.marker.x+r*1.7)}" y2="${fmt(v.marker.y)}"/>`+
+        `<line x1="${fmt(v.marker.x)}" y1="${fmt(v.marker.y-r*1.7)}" x2="${fmt(v.marker.x)}" y2="${fmt(v.marker.y+r*1.7)}"/>`+
+      `</g>`;
+    }
+
+    const baseMarkup=`<g>${inner}</g>`;
+    canvas.innerHTML=baseMarkup+textMarkup+markerMarkup;
+    canvas.dataset.svgWidth=vbW;
+    canvas.dataset.svgHeight=vbH;
+    exportOverride={ width:vbW, height:vbH, markup:baseMarkup+textMarkup };
+
+    metaEl.innerHTML=`
+      <div class="meta-row"><span>Wymiary bazy</span><strong>${fmt(vbW)} × ${fmt(vbH)} mm</strong></div>
+      <div class="meta-row"><span>Plik bazowy</span><strong>${escapeXml(v.fileName)}</strong></div>
+      <div class="meta-row"><span>Napis</span><strong>${(v.marker && text) ? escapeXml(text) : '— wskaż miejsce i wpisz treść'}</strong></div>
+    `;
+  }
+
   function regenerate(){
+    exportOverride=null;
     let result, extraInfo='';
+
+    if(currentPattern==='ownBase'){
+      renderOwnBase();
+      return;
+    }
 
     if(currentPattern==='auto'){
       const v=values.auto;
@@ -544,11 +745,23 @@ select:focus,input[type=text]:focus{outline:none;border-color:var(--accent)}
     canvas.dataset.svgHeight=result.height;
   }
 
+  canvas.addEventListener('click', evt=>{
+    if(currentPattern!=='ownBase') return;
+    const v=values.ownBase;
+    if(!v.base) return;
+    const p=screenToCanvasPoint(evt);
+    if(!p) return;
+    v.marker={x:p.x, y:p.y};
+    renderControls(); regenerate();
+  });
+
   document.getElementById('downloadBtn').addEventListener('click', ()=>{
-    const w=canvas.dataset.svgWidth, h=canvas.dataset.svgHeight;
+    const w = exportOverride ? exportOverride.width : canvas.dataset.svgWidth;
+    const h = exportOverride ? exportOverride.height : canvas.dataset.svgHeight;
+    const markup = exportOverride ? exportOverride.markup : canvas.innerHTML;
     if(!w || !h) return;
     const svgStr=`<?xml version="1.0" encoding="UTF-8"?>\n`+
-      `<svg xmlns="${SVG_NS}" viewBox="0 0 ${w} ${h}" width="${w}mm" height="${h}mm">${canvas.innerHTML}</svg>`;
+      `<svg xmlns="${SVG_NS}" viewBox="0 0 ${w} ${h}" width="${w}mm" height="${h}mm">${markup}</svg>`;
     const blob=new Blob([svgStr], {type:'image/svg+xml'});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');
