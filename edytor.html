@@ -233,6 +233,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
       case 'polygon': return polyD(cx,cy,w/2,h/2,Math.max(3,o.sides||6),-90);
       case 'star': return starD(cx,cy,w/2,h/2,Math.max(3,o.points||5),clamp(o.inner||0.5,0.05,0.95),-90);
       case 'line': return o.flip ? `M${fmt(x)} ${fmt(y+h)}L${fmt(x+w)} ${fmt(y)}` : `M${fmt(x)} ${fmt(y)}L${fmt(x+w)} ${fmt(y+h)}`;
+      case 'path': return o.d||'';
       default: return '';
     }
   }
@@ -263,6 +264,15 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 
   /* ---------- markup for one object ---------- */
   function innerGeometry(o, forExport){
+    if(o.type==='path'){
+      const lcx=(o.bx||0)+(o.bw||0)/2, lcy=(o.by||0)+(o.bh||0)/2;
+      const t=`translate(${fmt(o.x||0)} ${fmt(o.y||0)}) rotate(${fmt(o.rotation||0)} ${fmt(lcx)} ${fmt(lcy)})`;
+      const fr=o.fillRule==='evenodd'?' fill-rule="evenodd"':'';
+      let geo;
+      if(forExport){ geo=`<path d="${o.d}"${exportShapeStyle(o)}${fr}/>`; }
+      else { const cls=o.mode==='engrave'?'geo-engrave':o.mode==='score'?'geo-score':'geo-cut'; geo=`<path d="${o.d}" class="${cls}"${fr}/>`; }
+      return `<g transform="${t}">${geo}</g>`;
+    }
     const cx=o.x+o.w/2, cy=o.y+o.h/2;
     const rot=o.rotation? ` transform="rotate(${fmt(o.rotation)} ${fmt(cx)} ${fmt(cy)})"`:'';
     let geo;
@@ -331,6 +341,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 
   // measured/analytic local (unrotated) bbox of an object
   function objBBox(o){
+    if(o.type==='path'){ return {x:(o.bx||0)+(o.x||0), y:(o.by||0)+(o.y||0), w:o.bw||1, h:o.bh||1}; }
     if(o.type==='text'){
       const el=gObjects.querySelector(`[data-id="${o.id}"] text`);
       if(el){ try{ const b=el.getBBox(); return {x:b.x,y:b.y,w:b.width,h:b.height}; }catch(e){} }
@@ -368,10 +379,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     s+=`<line class="sel-rot-line" x1="${fmt(c.x)}" y1="${fmt(b.y)}" x2="${fmt(c.x)}" y2="${fmt(rotY)}"/>`;
     s+=`<circle class="sel-rot" cx="${fmt(c.x)}" cy="${fmt(rotY)}" r="${fmt(hr*1.25)}" style="pointer-events:none"/>`;
     s+=`<circle cx="${fmt(c.x)}" cy="${fmt(rotY)}" r="${fmt(hit)}" fill="transparent" data-handle="rot"/>`;
-    hs.forEach(([k,hx,hy])=>{
-      s+=`<rect class="sel-handle" x="${fmt(hx-hr)}" y="${fmt(hy-hr)}" width="${fmt(hr*2)}" height="${fmt(hr*2)}" style="pointer-events:none"/>`;
-      s+=`<rect x="${fmt(hx-hit)}" y="${fmt(hy-hit)}" width="${fmt(hit*2)}" height="${fmt(hit*2)}" fill="transparent" data-handle="${k}"/>`;
-    });
+    if(o.type!=='path'){ // wynik operacji boolowskiej: tylko obrót i przesuwanie (bez skalowania uchwytami)
+      hs.forEach(([k,hx,hy])=>{
+        s+=`<rect class="sel-handle" x="${fmt(hx-hr)}" y="${fmt(hy-hr)}" width="${fmt(hr*2)}" height="${fmt(hr*2)}" style="pointer-events:none"/>`;
+        s+=`<rect x="${fmt(hx-hit)}" y="${fmt(hy-hit)}" width="${fmt(hit*2)}" height="${fmt(hit*2)}" fill="transparent" data-handle="${k}"/>`;
+      });
+    }
     s+=`</g>`;
     gOverlay.innerHTML=s;
   }
@@ -442,6 +455,102 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     const i=state.objects.findIndex(x=>x.id===o.id);
     state.objects.splice(i,0,c);              // wstaw PRZED oryginałem -> rysuje się pod spodem
     state.selectedIds=[c.id]; pushHistory(); renderAll(); renderProps();
+  }
+
+  /* ---------------- Operacje boolowskie (suma / różnica / część wspólna) ---------------- */
+  const BOOL_TYPES=['rect','ellipse','polygon','star','path'];
+  function flattenToPoly(o){
+    let d;
+    if(o.type==='path') d=o.d; else if(BOOL_TYPES.includes(o.type)) d=shapeD(o); else return null;
+    const path=document.createElementNS(SVG_NS,'path'); path.setAttribute('d',d);
+    let len; try{ len=path.getTotalLength(); }catch(e){ return null; }
+    if(!len) return null;
+    const n=Math.max(40, Math.min(720, Math.ceil(len/0.5))), pts=[];
+    // deterministyczny mikro-jitter (~0.004 mm, niewidoczny dla lasera) rozbija
+    // przypadki zdegenerowane (wspólne wierzchołki/krawędzie), na które algorytm
+    // Greinera–Hormanna jest wrażliwy — dzięki temu przecięcia są zawsze czyste
+    const EPS=0.004;
+    for(let i=0;i<n;i++){ const p=path.getPointAtLength(len*i/n);
+      pts.push([p.x+Math.sin((i+1)*12.9898)*EPS, p.y+Math.cos((i+1)*78.233)*EPS]); }
+    if(o.type==='path'){
+      const lcx=(o.bx||0)+(o.bw||0)/2, lcy=(o.by||0)+(o.bh||0)/2, r=deg2rad(o.rotation||0);
+      for(const pt of pts){ const rp=rotatePt(pt[0],pt[1],lcx,lcy,r); pt[0]=rp.x+(o.x||0); pt[1]=rp.y+(o.y||0); }
+    } else if(o.rotation){
+      const c={x:o.x+o.w/2,y:o.y+o.h/2}, r=deg2rad(o.rotation);
+      for(const pt of pts){ const rp=rotatePt(pt[0],pt[1],c.x,c.y,r); pt[0]=rp.x; pt[1]=rp.y; }
+    }
+    return pts;
+  }
+  function polyToPathD(poly){ return poly.map((p,i)=>(i?'L':'M')+fmt(p[0])+' '+fmt(p[1])).join('')+'Z'; }
+  function polysBBoxMulti(polys){ let a={minx:Infinity,miny:Infinity,maxx:-Infinity,maxy:-Infinity};
+    polys.forEach(pl=>pl.forEach(p=>{ a.minx=Math.min(a.minx,p[0]); a.miny=Math.min(a.miny,p[1]); a.maxx=Math.max(a.maxx,p[0]); a.maxy=Math.max(a.maxy,p[1]); })); return a; }
+  function pointInPoly(pt, poly){ let inside=false; const x=pt[0],y=pt[1];
+    for(let i=0,j=poly.length-1;i<poly.length;j=i++){ const xi=poly[i][0],yi=poly[i][1],xj=poly[j][0],yj=poly[j][1];
+      if(((yi>y)!==(yj>y)) && (x<(xj-xi)*(y-yi)/(yj-yi)+xi)) inside=!inside; } return inside; }
+  function polyArea(poly){ let a=0; for(let i=0,j=poly.length-1;i<poly.length;j=i++){ a+=(poly[j][0]+poly[i][0])*(poly[j][1]-poly[i][1]); } return a/2; }
+  // Greiner–Hormann clipping (zwalidowane na znanych polach: kwadraty, okręgi, gwiazda)
+  function clipGH(subject, clip, kind){
+    function build(arr){ const vs=arr.map(p=>({x:p[0],y:p[1],alpha:0,inter:false,neighbour:null,entry:false,visited:false,next:null,prev:null}));
+      const n=vs.length; for(let i=0;i<n;i++){ vs[i].next=vs[(i+1)%n]; vs[i].prev=vs[(i-1+n)%n]; } return vs; }
+    let S=build(subject), C=build(clip);
+    function segInt(p0,p1,p2,p3){ const d1x=p1.x-p0.x,d1y=p1.y-p0.y,d2x=p3.x-p2.x,d2y=p3.y-p2.y; const den=d1x*d2y-d1y*d2x;
+      if(Math.abs(den)<1e-12) return null; const tx=p2.x-p0.x,ty=p2.y-p0.y; const a=(tx*d2y-ty*d2x)/den, b=(tx*d1y-ty*d1x)/den;
+      if(a>1e-9&&a<1-1e-9&&b>1e-9&&b<1-1e-9) return {a,b,x:p0.x+a*d1x,y:p0.y+a*d1y}; return null; }
+    function listOf(first){ const arr=[]; let v=first; do{ arr.push(v); v=v.next; }while(v!==first); return arr; }
+    function nextNonInter(v){ let n=v.next; while(n.inter) n=n.next; return n; }
+    function insertAlong(a,b,v){ let cur=a.next; while(cur!==b && cur.inter && cur.alpha<v.alpha) cur=cur.next; v.prev=cur.prev; v.next=cur; cur.prev.next=v; cur.prev=v; }
+    let Slist=listOf(S[0]), Clist=listOf(C[0]);
+    for(const sv of Slist){ if(sv.inter) continue; const sn=nextNonInter(sv);
+      for(const cv of Clist){ if(cv.inter) continue; const cn=nextNonInter(cv); const I=segInt(sv,sn,cv,cn);
+        if(I){ const i1={x:I.x,y:I.y,alpha:I.a,inter:true,neighbour:null,entry:false,visited:false,next:null,prev:null};
+               const i2={x:I.x,y:I.y,alpha:I.b,inter:true,neighbour:null,entry:false,visited:false,next:null,prev:null};
+               i1.neighbour=i2; i2.neighbour=i1; insertAlong(sv,sn,i1); insertAlong(cv,cn,i2); } } }
+    Slist=listOf(S[0]); Clist=listOf(C[0]);
+    if(Slist.filter(v=>v.inter).length===0){
+      const sInC=pointInPoly([S[0].x,S[0].y],clip), cInS=pointInPoly([C[0].x,C[0].y],subject);
+      if(kind==='intersection'){ if(sInC) return [subject.slice()]; if(cInS) return [clip.slice()]; return []; }
+      if(kind==='difference'){ if(sInC) return []; if(cInS) return [subject.slice(), clip.slice().reverse()]; return [subject.slice()]; }
+      if(sInC) return [clip.slice()]; if(cInS) return [subject.slice()]; return [subject.slice(),clip.slice()]; }
+    const sIn=pointInPoly([S[0].x,S[0].y],clip), cIn=pointInPoly([C[0].x,C[0].y],subject);
+    let status = kind==='intersection'?!sIn : kind==='union'?sIn : /*difference*/ sIn;
+    for(const v of Slist){ if(v.inter){ v.entry=status; status=!status; } }
+    status = kind==='intersection'?!cIn : kind==='union'?cIn : /*difference*/ !cIn;
+    for(const v of Clist){ if(v.inter){ v.entry=status; status=!status; } }
+    const result=[];
+    while(true){ let start=null; for(const v of Slist){ if(v.inter&&!v.visited){ start=v; break; } } if(!start) break;
+      const ring=[]; let cur=start;
+      do{ cur.visited=true; if(cur.neighbour) cur.neighbour.visited=true;
+        if(cur.entry){ do{ cur=cur.next; ring.push([cur.x,cur.y]); }while(!cur.inter); }
+        else { do{ cur=cur.prev; ring.push([cur.x,cur.y]); }while(!cur.inter); }
+        cur=cur.neighbour; } while(cur && cur!==start);
+      if(ring.length>=3) result.push(ring); }
+    return result;
+  }
+  function clipMany(polys, kind){
+    let acc=polys[0];
+    for(let i=1;i<polys.length;i++){ const res=clipGH(acc,polys[i],kind);
+      if(!res.length) return kind==='intersection'?[]:[acc];
+      acc=res.reduce((a,b)=>Math.abs(polyArea(b))>Math.abs(polyArea(a))?b:a, res[0]); }
+    return [acc];
+  }
+  function finalizeBoolean(sel, dStr, bb, mode){
+    const result={id:uid(),type:'path',name:'Wynik operacji',d:dStr,fillRule:'evenodd',
+      bx:bb.minx,by:bb.miny,bw:Math.max(1,bb.maxx-bb.minx),bh:Math.max(1,bb.maxy-bb.miny),
+      x:0,y:0,rotation:0,mode:mode||'cut',visible:true,locked:false,repeat:{type:'none'}};
+    const insertAt=Math.min(...sel.map(o=>state.objects.indexOf(o)));
+    state.objects=state.objects.filter(o=>!sel.includes(o));
+    state.objects.splice(insertAt,0,result);
+    state.selectedIds=[result.id]; pushHistory(); renderAll(); renderProps();
+  }
+  function booleanOp(kind){
+    const sel=getSelected().filter(o=>BOOL_TYPES.includes(o.type));
+    if(sel.length<2){ alert('Zaznacz co najmniej 2 kształty (prostokąt, elipsa, wielokąt, gwiazda lub wynik operacji).'); return; }
+    // kolejność dla różnicy: od spodu (pierwszy = baza, kolejne odejmowane)
+    const polys=sel.map(flattenToPoly).filter(Boolean);
+    if(polys.length<2) return;
+    const rings = polys.length===2 ? clipGH(polys[0],polys[1],kind) : clipMany(polys,kind);
+    if(!rings.length){ alert(kind==='intersection'?'Zaznaczone kształty nie mają części wspólnej.':kind==='difference'?'Po odjęciu nie zostało nic.':'Operacja nie dała wyniku.'); return; }
+    finalizeBoolean(sel, rings.map(polyToPathD).join(' '), polysBBoxMulti(rings), sel[0].mode);
   }
 
   /* ---------------- Pointer interactions ---------------- */
@@ -666,10 +775,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
       <button data-align="top">⊤ Góra</button><button data-align="vcenter">┼ Środek</button><button data-align="bottom">⊥ Dół</button></div></div>`;
     if(sel.length>=3) h+=`<div class="field"><label>Rozłóż równomiernie</label><div class="seg">
       <button data-dist="h">↔ Poziomo</button><button data-dist="v">↕ Pionowo</button></div></div>`;
+    const boolCount=sel.filter(o=>BOOL_TYPES.includes(o.type)).length;
+    if(boolCount>=2){
+      h+=`<div class="field"><label>Operacje na kształtach</label><div class="seg">
+        <button data-bool="union">Suma</button><button data-bool="difference">Różnica</button><button data-bool="intersection">Wspólne</button></div>
+        <p style="font-size:.74rem;color:var(--muted);margin-top:7px;line-height:1.5">Suma = scal w jeden kształt · Różnica = wytnij dziurę (góra w dół) · Wspólne = część wspólna. Zamienia zaznaczone kształty w jeden wynik.</p></div>`;
+    }
     h+=`<div class="empty-note">Przeciągnij dowolny zaznaczony element, aby przesunąć całą grupę. Shift+klik dodaje lub usuwa element z zaznaczenia.</div>`;
     propsEl.innerHTML=h;
     propsEl.querySelectorAll('[data-align]').forEach(b=>b.addEventListener('click',()=>alignSel(b.dataset.align)));
     propsEl.querySelectorAll('[data-dist]').forEach(b=>b.addEventListener('click',()=>distributeSel(b.dataset.dist)));
+    propsEl.querySelectorAll('[data-bool]').forEach(b=>b.addEventListener('click',()=>booleanOp(b.dataset.bool)));
     propsEl.querySelectorAll('[data-seg="mmode"] button').forEach(b=>b.addEventListener('click',()=>{ const m=b.dataset.mode; getSelected().forEach(o=>o.mode=m); renderObjects(); renderLayers(); pushHistory(); }));
   }
   function renderProps(){
@@ -684,8 +800,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
       <button class="engrave ${o.mode==='engrave'?'on':''}" data-mode="engrave">Grawer</button>
       <button class="score ${o.mode==='score'?'on':''}" data-mode="score">Nacięcie</button></div></div>`;
     // position/size
-    if(o.type==='text'){
-      h+=`<div class="field"><label>Pozycja (mm)</label><div class="row2">
+    if(o.type==='text'||o.type==='path'){
+      h+=`<div class="field"><label>Przesunięcie X / Y (mm)</label><div class="row2">
         <input type="number" data-prop="x" value="${fmt(o.x)}" step="1"><input type="number" data-prop="y" value="${fmt(o.y)}" step="1"></div></div>`;
     } else {
       h+=`<div class="field"><label>Pozycja X / Y (mm)</label><div class="row2">
@@ -724,7 +840,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
         ${[['vertical','Pionowa'],['horizontal','Pozioma'],['both','Obie']].map(([v,l])=>`<option value="${v}" ${ (r.axis||'vertical')===v?'selected':''}>${l}</option>`).join('')}</select></div>`;
     }
     // offset / obwódka (nie dla linii)
-    if(o.type!=='line'){
+    if(o.type!=='line' && o.type!=='path'){
       h+=`<div class="field"><label>Obwódka / offset (mm)</label><div class="row2">
         <input type="number" id="offsetVal" value="5" step="1" style="flex:0 0 90px">
         <button type="button" id="offsetBtn" class="tbtn" style="flex:1;justify-content:center">+ Utwórz obwódkę</button></div></div>`;
