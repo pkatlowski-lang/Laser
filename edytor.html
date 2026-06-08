@@ -430,8 +430,45 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
   /* ---------------- Selection helpers ---------------- */
   function getSelected(){ return state.objects.filter(o=>state.selectedIds.includes(o.id)); }
   function getSel(){ return state.selectedIds.length===1 ? (state.objects.find(o=>o.id===state.selectedIds[0])||null) : null; }
-  function select(id){ state.selectedIds = id? [id] : []; renderOverlay(); renderLayers(); renderProps(); }
-  function toggleSelection(id){ const i=state.selectedIds.indexOf(id); if(i>=0) state.selectedIds.splice(i,1); else state.selectedIds.push(id); renderOverlay(); renderLayers(); renderProps(); }
+  // grupy: kliknięcie dowolnego elementu grupy zaznacza całą grupę naraz (jak Group w Cuttle/Illustratorze)
+  function expandGroupSelection(ids){
+    const result=new Set(ids); let changed=true;
+    while(changed){ changed=false;
+      state.objects.forEach(o=>{
+        if(result.has(o.id) && o.groupId){
+          state.objects.forEach(o2=>{ if(o2.groupId===o.groupId && !result.has(o2.id)){ result.add(o2.id); changed=true; } });
+        }
+      });
+    }
+    return [...result];
+  }
+  function select(id){ state.selectedIds = id? expandGroupSelection([id]) : []; renderOverlay(); renderLayers(); renderProps(); }
+  function toggleSelection(id){
+    const i=state.selectedIds.indexOf(id);
+    if(i>=0){
+      const o=state.objects.find(x=>x.id===id);
+      if(o&&o.groupId){ const gid=o.groupId; state.selectedIds=state.selectedIds.filter(x=>{ const oo=state.objects.find(y=>y.id===x); return !(oo&&oo.groupId===gid); }); }
+      else state.selectedIds.splice(i,1);
+    } else {
+      state.selectedIds=expandGroupSelection([...state.selectedIds, id]);
+    }
+    renderOverlay(); renderLayers(); renderProps();
+  }
+  function groupSel(){
+    const sel=getSelected().filter(o=>!o.locked);
+    if(sel.length<2) return;
+    const gid=uid();
+    sel.forEach(o=>o.groupId=gid);
+    state.selectedIds=sel.map(o=>o.id);
+    pushHistory(); renderAll(); renderProps();
+  }
+  function ungroupSel(){
+    const sel=getSelected();
+    const gids=[...new Set(sel.map(o=>o.groupId).filter(Boolean))];
+    if(!gids.length) return;
+    state.objects.forEach(o=>{ if(gids.includes(o.groupId)) delete o.groupId; });
+    pushHistory(); renderAll(); renderProps();
+  }
   function rotatedBBox(o){
     const b=objBBox(o), c={x:b.x+b.w/2,y:b.y+b.h/2}, rot=deg2rad(o.rotation||0);
     const pts=[[b.x,b.y],[b.x+b.w,b.y],[b.x+b.w,b.y+b.h],[b.x,b.y+b.h]].map(([x,y])=>rotatePt(x,y,c.x,c.y,rot));
@@ -806,7 +843,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
       const r=drag.rect;
       if(r && (r.w>1.5||r.h>1.5)){
         const hit=state.objects.filter(o=>o.visible && !o.locked && bboxIntersect(rotatedBBox(o), r)).map(o=>o.id);
-        state.selectedIds = drag.add ? [...new Set([...drag.base, ...hit])] : hit;
+        state.selectedIds = expandGroupSelection(drag.add ? [...new Set([...drag.base, ...hit])] : hit);
       }
       drag=null; renderOverlay(); renderLayers(); renderProps(); return;
     }
@@ -894,6 +931,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
   }
   function renderMultiProps(sel){
     let h=`<div class="empty-note" style="padding-bottom:4px">Zaznaczono elementów: <strong style="color:var(--text)">${sel.length}</strong></div>`;
+    const gids=[...new Set(sel.map(o=>o.groupId).filter(Boolean))];
+    const isWholeGroup = gids.length===1 && sel.every(o=>o.groupId===gids[0]) && state.objects.filter(o=>o.groupId===gids[0]).length===sel.length;
+    h+=`<div class="field"><div class="seg">`;
+    if(isWholeGroup) h+=`<button data-group="ungroup">⛓ Rozgrupuj (Ctrl+Shift+G)</button>`;
+    else h+=`<button data-group="group">🔗 Grupuj (Ctrl+G)</button>`;
+    h+=`</div></div>`;
     h+=`<div class="field"><label>Tryb dla wszystkich</label><div class="seg" data-seg="mmode">
       <button class="cut" data-mode="cut">Cięcie</button><button class="engrave" data-mode="engrave">Grawer</button><button class="score" data-mode="score">Nacięcie</button></div></div>`;
     h+=`<div class="field"><label>Wyrównaj w poziomie</label><div class="seg">
@@ -913,6 +956,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     propsEl.querySelectorAll('[data-align]').forEach(b=>b.addEventListener('click',()=>alignSel(b.dataset.align)));
     propsEl.querySelectorAll('[data-dist]').forEach(b=>b.addEventListener('click',()=>distributeSel(b.dataset.dist)));
     propsEl.querySelectorAll('[data-bool]').forEach(b=>b.addEventListener('click',()=>booleanOp(b.dataset.bool)));
+    propsEl.querySelectorAll('[data-group]').forEach(b=>b.addEventListener('click',()=>{ b.dataset.group==='group'?groupSel():ungroupSel(); }));
     propsEl.querySelectorAll('[data-seg="mmode"] button').forEach(b=>b.addEventListener('click',()=>{ const m=b.dataset.mode; getSelected().forEach(o=>o.mode=m); renderObjects(); renderLayers(); pushHistory(); }));
   }
   function renderProps(){
@@ -1218,7 +1262,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
   document.getElementById('exportBtn').addEventListener('click',exportSVG);
 
   function duplicateSel(){ const sel=getSelected(); if(!sel.length) return;
-    const copies=sel.map(o=>{ const c=JSON.parse(JSON.stringify(o)); c.id=uid(); c.x+=10; c.y+=10; c.name=''; return c; });
+    const gidMap={};
+    const copies=sel.map(o=>{ const c=JSON.parse(JSON.stringify(o)); c.id=uid(); c.x+=10; c.y+=10; c.name='';
+      if(c.groupId){ if(!gidMap[c.groupId]) gidMap[c.groupId]=uid(); c.groupId=gidMap[c.groupId]; }
+      return c; });
     state.objects.push(...copies); state.selectedIds=copies.map(c=>c.id); pushHistory(); renderAll(); renderProps(); }
   function deleteSel(){ const ids=state.selectedIds.slice(); if(!ids.length) return;
     state.objects=state.objects.filter(o=>!ids.includes(o.id)); state.selectedIds=[]; pushHistory(); renderAll(); renderProps(); }
@@ -1228,7 +1275,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
   function copySel(){ const sel=getSelected(); if(!sel.length) return;
     clipboard=sel.map(o=>JSON.parse(JSON.stringify(o))); }
   function pasteClipboard(){ if(!clipboard.length) return;
-    const copies=clipboard.map(o=>{ const c=JSON.parse(JSON.stringify(o)); c.id=uid(); c.x+=10; c.y+=10; c.name=''; return c; });
+    const gidMap={};
+    const copies=clipboard.map(o=>{ const c=JSON.parse(JSON.stringify(o)); c.id=uid(); c.x+=10; c.y+=10; c.name='';
+      if(c.groupId){ if(!gidMap[c.groupId]) gidMap[c.groupId]=uid(); c.groupId=gidMap[c.groupId]; }
+      return c; });
     clipboard=copies.map(c=>JSON.parse(JSON.stringify(c))); // kolejne Ctrl+V odsuwa dalej, jak w Illustratorze/Cuttle
     state.objects.push(...copies); state.selectedIds=copies.map(c=>c.id); pushHistory(); renderAll(); renderProps(); }
   function zoomBy(f){ const r=canvasRect(); const aspect=(r.width&&r.height)?r.width/r.height:state.view.w/state.view.h;
@@ -1252,6 +1302,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){ e.preventDefault(); e.shiftKey?redo():undo(); return; }
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='y'){ e.preventDefault(); redo(); return; }
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='d'){ e.preventDefault(); duplicateSel(); return; }
+    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='g'){ e.preventDefault(); e.shiftKey?ungroupSel():groupSel(); return; }
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='c'){ if(!typing){ e.preventDefault(); copySel(); } return; }
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='v'){ if(!typing){ e.preventDefault(); pasteClipboard(); } return; }
     if(typing) return;
