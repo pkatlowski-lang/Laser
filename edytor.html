@@ -190,6 +190,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 
   const TOOLS=[
     {key:'select',label:'Wskaźnik',ico:'↖'},
+    {key:'pan',label:'Rączka',ico:'✋'},
     {key:'rect',label:'Prostokąt',ico:'▭'},
     {key:'ellipse',label:'Elipsa',ico:'◯'},
     {key:'polygon',label:'Wielokąt',ico:'⬡'},
@@ -304,6 +305,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     gObjects=canvas.querySelector('#gObjects');
     gOverlay=canvas.querySelector('#gOverlay');
   }
+  function canvasRect(){ return canvas.getBoundingClientRect(); }
+  // Keep the viewBox aspect ratio equal to the on-screen canvas aspect ratio so
+  // there is no letterboxing — this makes pan/zoom/pinch math exact and removes
+  // "dead zones" where clicks landed outside the drawing area.
+  function syncViewAspect(){ const r=canvasRect(); if(r.width>0&&r.height>0) state.view.h=state.view.w*(r.height/r.width); }
   function applyView(){
     const v=state.view;
     canvas.setAttribute('viewBox',`${fmt(v.x)} ${fmt(v.y)} ${fmt(v.w)} ${fmt(v.h)}`);
@@ -342,13 +348,18 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     const hs=[ ['nw',b.x,b.y],['n',b.x+b.w/2,b.y],['ne',b.x+b.w,b.y],
                ['e',b.x+b.w,b.y+b.h/2],['se',b.x+b.w,b.y+b.h],['s',b.x+b.w/2,b.y+b.h],
                ['sw',b.x,b.y+b.h],['w',b.x,b.y+b.h/2] ];
-    const hr=state.view.w*0.009; // handle radius in doc units, ~constant on screen
+    const hr=state.view.w*0.011; // visible handle radius (~constant on screen)
+    const hit=hr*2.4;            // larger invisible hit area for easy touch grabbing
     let s=`<g transform="rotate(${fmt(o.rotation||0)} ${fmt(c.x)} ${fmt(c.y)})">`;
     s+=`<rect class="sel-box" x="${fmt(b.x)}" y="${fmt(b.y)}" width="${fmt(b.w)}" height="${fmt(b.h)}"/>`;
-    const rotY=b.y-hr*3.4;
+    const rotY=b.y-hr*4;
     s+=`<line class="sel-rot-line" x1="${fmt(c.x)}" y1="${fmt(b.y)}" x2="${fmt(c.x)}" y2="${fmt(rotY)}"/>`;
-    s+=`<circle class="sel-rot" cx="${fmt(c.x)}" cy="${fmt(rotY)}" r="${fmt(hr*1.1)}" data-handle="rot"/>`;
-    hs.forEach(([k,hx,hy])=>{ s+=`<rect class="sel-handle" x="${fmt(hx-hr)}" y="${fmt(hy-hr)}" width="${fmt(hr*2)}" height="${fmt(hr*2)}" data-handle="${k}"/>`; });
+    s+=`<circle class="sel-rot" cx="${fmt(c.x)}" cy="${fmt(rotY)}" r="${fmt(hr*1.25)}" style="pointer-events:none"/>`;
+    s+=`<circle cx="${fmt(c.x)}" cy="${fmt(rotY)}" r="${fmt(hit)}" fill="transparent" data-handle="rot"/>`;
+    hs.forEach(([k,hx,hy])=>{
+      s+=`<rect class="sel-handle" x="${fmt(hx-hr)}" y="${fmt(hy-hr)}" width="${fmt(hr*2)}" height="${fmt(hr*2)}" style="pointer-events:none"/>`;
+      s+=`<rect x="${fmt(hx-hit)}" y="${fmt(hy-hit)}" width="${fmt(hit*2)}" height="${fmt(hit*2)}" fill="transparent" data-handle="${k}"/>`;
+    });
     s+=`</g>`;
     gOverlay.innerHTML=s;
   }
@@ -387,9 +398,15 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
   }
 
   /* ---------------- Pointer interactions ---------------- */
-  let drag=null;
+  let drag=null, spaceDown=false;
+  const pointers=new Map(); let pinch=null;
+  function trackPointer(e){ pointers.set(e.pointerId,{x:e.clientX,y:e.clientY}); }
+
   canvas.addEventListener('pointerdown', e=>{
-    if(e.button===1){ startPan(e); return; }
+    trackPointer(e);
+    if(pointers.size>=2){ beginPinch(); return; }              // two fingers -> pan/zoom
+    const wantPan = e.button===1 || spaceDown || state.tool==='pan';
+    if(wantPan){ startPan(e); return; }
     const docP=clientToDoc(e);
     const handle=e.target.getAttribute && e.target.getAttribute('data-handle');
     if(state.tool==='select'){
@@ -401,8 +418,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
         if(o && !o.locked) startMove(e,o,docP);
         return;
       }
-      // empty space -> pan with select tool too (handy on touch) or deselect
-      select(null); startPan(e); return;
+      select(null); return;                                     // empty click = only deselect (no accidental pan)
     }
     // shape tools -> draw
     startDraw(e,docP);
@@ -410,7 +426,26 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 
   function setCapture(e){ try{ canvas.setPointerCapture(e.pointerId); }catch(_){} }
 
-  function startPan(e){ setCapture(e); drag={mode:'pan',sx:e.clientX,sy:e.clientY,vx:state.view.x,vy:state.view.y}; }
+  function startPan(e){ setCapture(e); canvas.style.cursor='grabbing';
+    drag={mode:'pan', r:canvasRect(), sx:e.clientX, sy:e.clientY, vx:state.view.x, vy:state.view.y, vw:state.view.w, vh:state.view.h}; }
+
+  /* ---- two-finger pan + pinch zoom (touch) ---- */
+  function beginPinch(){
+    drag=null;
+    const ps=[...pointers.values()]; if(ps.length<2) return; const a=ps[0], b=ps[1];
+    pinch={ r:canvasRect(), dist:Math.hypot(a.x-b.x,a.y-b.y)||1, mid:{x:(a.x+b.x)/2,y:(a.y+b.y)/2},
+            vx:state.view.x, vy:state.view.y, vw:state.view.w, vh:state.view.h };
+  }
+  function updatePinch(){
+    const ps=[...pointers.values()]; if(ps.length<2||!pinch) return; const a=ps[0], b=ps[1];
+    const dist=Math.hypot(a.x-b.x,a.y-b.y)||1, mid={x:(a.x+b.x)/2,y:(a.y+b.y)/2}, r=pinch.r;
+    let nw=clamp(pinch.vw*(pinch.dist/dist),20,4000), nh=nw*(pinch.vh/pinch.vw);
+    const fx=(pinch.mid.x-r.left)/r.width, fy=(pinch.mid.y-r.top)/r.height;
+    const docX=pinch.vx+fx*pinch.vw, docY=pinch.vy+fy*pinch.vh;
+    const cfx=(mid.x-r.left)/r.width, cfy=(mid.y-r.top)/r.height;
+    state.view.w=nw; state.view.h=nh; state.view.x=docX-cfx*nw; state.view.y=docY-cfy*nh;
+    applyView(); renderOverlay();
+  }
   function startMove(e,o,docP){ setCapture(e); drag={mode:'move',o,ox:o.x,oy:o.y,sx:docP.x,sy:docP.y}; }
   function startDraw(e,docP){
     setCapture(e);
@@ -432,13 +467,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
   }
 
   window.addEventListener('pointermove', e=>{
+    if(pointers.has(e.pointerId)) pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(pinch){ updatePinch(); return; }
     if(!drag) return;
     if(drag.mode==='pan'){
-      const ctm=canvas.getScreenCTM(); const sc=state.view.w/canvas.clientWidth; // doc per px (approx)
-      // precise: convert both points
-      const dx=(e.clientX-drag.sx), dy=(e.clientY-drag.sy);
-      const scale=state.view.w / canvas.getBoundingClientRect().width;
-      state.view.x=drag.vx - dx*scale; state.view.y=drag.vy - dy*scale; applyView(); return;
+      const r=drag.r;
+      const dxF=(e.clientX-drag.sx)/r.width, dyF=(e.clientY-drag.sy)/r.height;
+      state.view.x=drag.vx - dxF*drag.vw; state.view.y=drag.vy - dyF*drag.vh;
+      applyView(); renderOverlay(); return;
     }
     const docP=clientToDoc(e);
     if(drag.mode==='move'){
@@ -461,7 +497,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     }
   });
   window.addEventListener('pointerup', e=>{
+    pointers.delete(e.pointerId);
+    if(pinch){ if(pointers.size<2){ pinch=null; drag=null; } return; }
     if(!drag) return;
+    if(drag.mode==='pan'){ drag=null; updateCanvasCursor(); return; }
     const m=drag.mode, o=drag.o;
     if(m==='draw'){
       if(o.type!=='line' && o.w<2 && o.h<2){ // treated as click -> default size centered
@@ -475,6 +514,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     }
     drag=null;
   });
+  window.addEventListener('pointercancel', e=>{ pointers.delete(e.pointerId); if(pointers.size<2) pinch=null; drag=null; });
 
   function doResize(d,docP,shift){
     const o=d.o;
@@ -502,16 +542,15 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     }
   }
 
-  /* zoom via wheel */
+  /* zoom via wheel — anchored to the cursor */
   canvas.addEventListener('wheel', e=>{
     e.preventDefault();
-    const before=clientToDoc(e);
-    const factor=e.deltaY<0?0.9:1/0.9;
-    const v=state.view; const nw=clamp(v.w*factor,20,4000), nh=nw*(v.h/v.w);
-    v.w=nw; v.h=nh;
-    const after=clientToDoc(e);
-    v.x+=before.x-after.x; v.y+=before.y-after.y;
-    applyView();
+    const r=canvasRect(); const fx=(e.clientX-r.left)/r.width, fy=(e.clientY-r.top)/r.height;
+    const v=state.view; const docX=v.x+fx*v.w, docY=v.y+fy*v.h;
+    const factor=e.deltaY<0?0.85:1/0.85;
+    const nw=clamp(v.w*factor,20,4000), nh=nw*(v.h/v.w);
+    v.w=nw; v.h=nh; v.x=docX-fx*nw; v.y=docY-fy*nh;
+    applyView(); renderOverlay();
   },{passive:false});
 
   /* ---------------- Properties panel ---------------- */
@@ -670,7 +709,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     b.addEventListener('click',()=>{ state.tool=t.key; syncToolButtons(); });
     toolsEl.appendChild(b);
   });
-  function syncToolButtons(){ toolsEl.querySelectorAll('.tbtn').forEach(b=>b.classList.toggle('active',b.dataset.tool===state.tool)); }
+  function syncToolButtons(){ toolsEl.querySelectorAll('.tbtn').forEach(b=>b.classList.toggle('active',b.dataset.tool===state.tool)); updateCanvasCursor(); }
+  function updateCanvasCursor(){ canvas.style.cursor = state.tool==='pan'?'grab' : (state.tool==='select'?'default':'crosshair'); }
 
   document.getElementById('undoBtn').addEventListener('click',undo);
   document.getElementById('redoBtn').addEventListener('click',redo);
@@ -686,12 +726,22 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 
   function duplicateSel(){ const o=getSel(); if(!o) return; const c=JSON.parse(JSON.stringify(o)); c.id=uid(); c.x+=10; c.y+=10; c.name=''; state.objects.push(c); state.selectedId=c.id; pushHistory(); renderAll(); renderProps(); }
   function deleteSel(){ const o=getSel(); if(!o) return; const i=state.objects.findIndex(x=>x.id===o.id); state.objects.splice(i,1); state.selectedId=null; pushHistory(); renderAll(); renderProps(); }
-  function zoomBy(f){ const v=state.view; const cx=v.x+v.w/2, cy=v.y+v.h/2; v.w=clamp(v.w*f,20,4000); v.h=v.w*(state.docH+40)/(state.docW+40); v.x=cx-v.w/2; v.y=cy-v.h/2; applyView(); renderOverlay(); }
-  function zoomFit(){ const m=20; state.view={x:-m,y:-m,w:state.docW+2*m,h:state.docH+2*m}; applyView(); renderOverlay(); }
+  function zoomBy(f){ const r=canvasRect(); const aspect=(r.width&&r.height)?r.width/r.height:state.view.w/state.view.h;
+    const v=state.view; const cx=v.x+v.w/2, cy=v.y+v.h/2;
+    v.w=clamp(v.w*f,20,4000); v.h=v.w/aspect; v.x=cx-v.w/2; v.y=cy-v.h/2; applyView(); renderOverlay(); }
+  function zoomFit(){
+    const r=canvasRect(); const aspect=(r.width&&r.height)? r.width/r.height : (state.docW+40)/(state.docH+40);
+    const m=20, dw=state.docW+2*m, dh=state.docH+2*m;
+    let vw=Math.max(dw, dh*aspect), vh=vw/aspect;
+    state.view={ x:-m-(vw-dw)/2, y:-m-(vh-dh)/2, w:vw, h:vh };
+    applyView(); renderOverlay();
+  }
 
   /* keyboard */
+  window.addEventListener('keyup',e=>{ if(e.code==='Space'){ spaceDown=false; if(!drag) updateCanvasCursor(); } });
   window.addEventListener('keydown',e=>{
     const typing=/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName);
+    if(e.code==='Space' && !typing){ spaceDown=true; if(!drag) canvas.style.cursor='grab'; e.preventDefault(); return; }
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){ e.preventDefault(); e.shiftKey?redo():undo(); return; }
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='y'){ e.preventDefault(); redo(); return; }
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='d'){ e.preventDefault(); duplicateSel(); return; }
@@ -755,9 +805,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
   }); tplEl.appendChild(b); });
 
   /* ---------------- Init ---------------- */
-  buildCanvasSkeleton(); applyView(); renderGrid(); renderAll(); renderProps();
+  buildCanvasSkeleton(); syncViewAspect(); zoomFit(); renderGrid(); renderAll(); renderProps();
+  updateCanvasCursor();
   pushHistory();
-  window.addEventListener('resize',()=>{ renderOverlay(); });
+  window.addEventListener('resize',()=>{ syncViewAspect(); applyView(); renderOverlay(); });
 })();
 </script>
 </body>
