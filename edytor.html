@@ -397,6 +397,32 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     renderAll(); renderProps();
   }
 
+  /* ---- Offset / obwódka: tworzy nowy kształt powiększony (lub pomniejszony) o d mm ---- */
+  function offsetShape(o, d){
+    const c=JSON.parse(JSON.stringify(o)); c.id=uid(); c.name=''; c.repeat={type:'none'}; c.mode='cut';
+    if(o.type==='rect'){
+      c.x=o.x-d; c.y=o.y-d; c.w=Math.max(1,o.w+2*d); c.h=Math.max(1,o.h+2*d); c.rx=Math.max(0,(o.rx||0)+d);
+    } else if(o.type==='ellipse'){
+      c.x=o.x-d; c.y=o.y-d; c.w=Math.max(1,o.w+2*d); c.h=Math.max(1,o.h+2*d);
+    } else if(o.type==='polygon'){
+      const k=d/Math.cos(Math.PI/Math.max(3,o.sides||6)); c.x=o.x-k; c.y=o.y-k; c.w=Math.max(1,o.w+2*k); c.h=Math.max(1,o.h+2*k);
+    } else if(o.type==='star'){
+      const k=d/Math.cos(Math.PI/Math.max(3,o.points||5)); c.x=o.x-k; c.y=o.y-k; c.w=Math.max(1,o.w+2*k); c.h=Math.max(1,o.h+2*k);
+    } else if(o.type==='text'){
+      const b=objBBox(o); c.type='rect'; delete c.text; delete c.font; delete c.fontSize;
+      c.x=b.x-d; c.y=b.y-d; c.w=Math.max(1,b.w+2*d); c.h=Math.max(1,b.h+2*d); c.rx=Math.min(c.w,c.h)*0.22;
+    } else { return null; } // line ma sens offsetu jako kapsuła — pomijamy
+    return c;
+  }
+  function addOffsetFromSel(d){
+    const o=getSel(); if(!o) return;
+    const c=offsetShape(o,d); if(!c) return;
+    c.name='Obwódka';
+    const i=state.objects.findIndex(x=>x.id===o.id);
+    state.objects.splice(i,0,c);              // wstaw PRZED oryginałem -> rysuje się pod spodem
+    state.selectedId=c.id; pushHistory(); renderAll(); renderProps();
+  }
+
   /* ---------------- Pointer interactions ---------------- */
   let drag=null, spaceDown=false;
   const pointers=new Map(); let pinch=null;
@@ -605,6 +631,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
       h+=`<div class="field"><label>Oś lustra</label><select data-prop="repeat.axis">
         ${[['vertical','Pionowa'],['horizontal','Pozioma'],['both','Obie']].map(([v,l])=>`<option value="${v}" ${ (r.axis||'vertical')===v?'selected':''}>${l}</option>`).join('')}</select></div>`;
     }
+    // offset / obwódka (nie dla linii)
+    if(o.type!=='line'){
+      h+=`<div class="field"><label>Obwódka / offset (mm)</label><div class="row2">
+        <input type="number" id="offsetVal" value="5" step="1" style="flex:0 0 90px">
+        <button type="button" id="offsetBtn" class="tbtn" style="flex:1;justify-content:center">+ Utwórz obwódkę</button></div></div>`;
+    }
     propsEl.innerHTML=h;
     bindProps();
   }
@@ -635,6 +667,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     });
     propsEl.querySelectorAll('[data-seg="mode"] button').forEach(b=>b.addEventListener('click',()=>{ o.mode=b.getAttribute('data-mode'); renderProps(); renderObjects(); pushHistory(); }));
     propsEl.querySelectorAll('[data-seg="flip"] button').forEach(b=>b.addEventListener('click',()=>{ o.flip=b.getAttribute('data-flip')==='1'; renderProps(); renderObjects(); pushHistory(); }));
+    const offBtn=propsEl.querySelector('#offsetBtn');
+    if(offBtn) offBtn.addEventListener('click',()=>{ const d=Number(propsEl.querySelector('#offsetVal').value)||0; if(d!==0) addOffsetFromSel(d); });
   }
   function normalizeRepeat(type,old){
     if(type==='none') return {type:'none'};
