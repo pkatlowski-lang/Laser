@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Generator wzorów parametrycznych — pliki SVG do lasera</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Dancing+Script:wght@600&family=Great+Vibes&family=Montserrat:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#15100a; --surface:#1f1810; --surface2:#291f13; --border:#3d2f1c;
+  --accent:#d8a14a; --accent-dark:#a8762c; --text:#ece2d0; --muted:#a8967c;
+  --font-d:'Playfair Display',serif; --font-b:'Inter',system-ui,sans-serif; --r:10px;
+}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-height:1.5}
+.app{min-height:100vh;display:flex;flex-direction:column}
+.topbar{padding:28px clamp(16px,4vw,48px) 8px}
+.topbar h1{font-family:var(--font-d);font-size:clamp(1.5rem,3vw,2.1rem);color:#fff;font-weight:700}
+.topbar h1 span{color:var(--accent)}
+.topbar p{color:var(--muted);margin-top:6px;font-size:.92rem;max-width:640px}
+.layout{display:flex;flex:1;flex-wrap:wrap;padding:8px clamp(16px,4vw,48px) 40px;gap:0}
+.sidebar{flex:0 0 320px;max-width:100%;display:flex;flex-direction:column;gap:18px;padding-right:28px}
+.tabs{display:flex;flex-wrap:wrap;gap:8px}
+.tab{padding:9px 16px;border-radius:100px;border:1.5px solid var(--border);background:transparent;color:var(--muted);font-size:.84rem;font-weight:600;cursor:pointer;transition:.2s}
+.tab:hover{border-color:var(--accent);color:var(--accent)}
+.tab.active{background:var(--accent);border-color:var(--accent);color:#1a1308}
+.controls{display:flex;flex-direction:column;gap:16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:20px}
+.ctrl-group label{display:block;font-size:.78rem;font-weight:600;color:var(--muted);letter-spacing:.03em;margin-bottom:8px;text-transform:uppercase}
+.range-wrap{display:flex;align-items:center;gap:12px}
+.range-wrap input[type=range]{flex:1;accent-color:var(--accent)}
+.range-val{font-family:var(--font-d);font-weight:700;color:var(--accent);min-width:42px;text-align:right;font-size:.85rem}
+select,input[type=text]{width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:inherit;font-size:.9rem}
+select:focus,input[type=text]:focus{outline:none;border-color:var(--accent)}
+.checkbox-label{display:flex;align-items:center;gap:10px;cursor:pointer}
+.checkbox-label span{font-size:.78rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+.checkbox-label input{accent-color:var(--accent);width:18px;height:18px}
+.actions{display:flex;flex-direction:column;gap:14px}
+.btn-download{padding:14px 20px;background:linear-gradient(135deg,var(--accent),var(--accent-dark));border:none;border-radius:8px;color:#1a1308;font-weight:700;font-size:.92rem;letter-spacing:.03em;cursor:pointer;transition:.2s}
+.btn-download:hover{transform:translateY(-2px);box-shadow:0 6px 24px rgba(216,161,74,.35)}
+.meta{display:flex;flex-direction:column;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 16px}
+.meta-row{display:flex;justify-content:space-between;font-size:.82rem;color:var(--muted)}
+.meta-row strong{color:var(--text);font-weight:600}
+.stage{flex:1;min-width:300px;display:flex;flex-direction:column;align-items:center;gap:14px}
+.canvas-wrap{width:100%;max-width:560px;aspect-ratio:1;background:
+  repeating-linear-gradient(0deg,rgba(0,0,0,.05) 0 1px,transparent 1px 20px),
+  repeating-linear-gradient(90deg,rgba(0,0,0,.05) 0 1px,transparent 1px 20px),
+  #e8d9b8;
+  border:1px solid var(--border);border-radius:var(--r);display:flex;align-items:center;justify-content:center;padding:24px}
+#canvas{width:100%;height:100%}
+.legend{display:flex;gap:20px;flex-wrap:wrap;justify-content:center;font-size:.78rem;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.swatch{width:14px;height:14px;border-radius:3px;display:inline-block}
+.sw-cut{background:none;border:2px solid #ff3b3b}
+.sw-engrave{background:#1c1c1c;border:2px solid #1c1c1c}
+.hint{font-size:.8rem;color:var(--muted);text-align:center;max-width:480px}
+@media(min-width:880px){.layout{flex-wrap:nowrap}.sidebar{border-right:1px solid var(--border)}}
+@media(max-width:879px){.sidebar{flex:1 1 100%;padding-right:0;margin-bottom:24px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <h1>Generator wzorów <span>parametrycznych</span></h1>
+    <p>Ustaw parametry, zobacz podgląd na żywo i pobierz gotowy plik SVG (w realnych milimetrach) do wycinania i grawerowania laserem.</p>
+  </header>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="tabs" id="tabs"></div>
+      <form class="controls" id="controls" onsubmit="return false"></form>
+      <div class="actions">
+        <button type="button" id="downloadBtn" class="btn-download">Pobierz plik SVG</button>
+        <div class="meta" id="meta"></div>
+      </div>
+    </aside>
+    <main class="stage">
+      <div class="canvas-wrap"><svg id="canvas" xmlns="http://www.w3.org/2000/svg"></svg></div>
+      <div class="legend">
+        <span><i class="swatch sw-cut"></i> czerwony kontur = cięcie</span>
+        <span><i class="swatch sw-engrave"></i> czarne wypełnienie = grawerowanie</span>
+      </div>
+      <p class="hint">Wskazówka: tekst w trybie „wycinanie” zwykle trzeba w programie do lasera zamienić na krzywe (outline), aby maszyna poprawnie odczytała kontury liter.</p>
+    </main>
+  </div>
+</div>
+<script>
+(function(){
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+
+  function fmt(n){ return Number(n.toFixed(3)); }
+  function pt(x,y){ return [x,y]; }
+  function pointsToPath(pts){
+    return pts.map((p,i)=>(i===0?'M':'L')+fmt(p[0])+' '+fmt(p[1])).join(' ')+' Z';
+  }
+  function polygonPoints(cx,cy,sides,radius,rotationDeg){
+    const rot=(rotationDeg||0)*Math.PI/180, pts=[];
+    for(let i=0;i<sides;i++){
+      const a=rot+i*2*Math.PI/sides;
+      pts.push(pt(cx+radius*Math.cos(a), cy+radius*Math.sin(a)));
+    }
+    return pts;
+  }
+  function circlePath(cx,cy,r){
+    return `M ${fmt(cx-r)} ${fmt(cy)} a ${fmt(r)} ${fmt(r)} 0 1 0 ${fmt(2*r)} 0 a ${fmt(r)} ${fmt(r)} 0 1 0 ${fmt(-2*r)} 0 Z`;
+  }
+  function ellipsePath(cx,cy,rx,ry){
+    return `M ${fmt(cx-rx)} ${fmt(cy)} a ${fmt(rx)} ${fmt(ry)} 0 1 0 ${fmt(2*rx)} 0 a ${fmt(rx)} ${fmt(ry)} 0 1 0 ${fmt(-2*rx)} 0 Z`;
+  }
+  function roundedRectPath(x,y,w,h,r){
+    return `M ${fmt(x+r)} ${fmt(y)} H ${fmt(x+w-r)} A ${fmt(r)} ${fmt(r)} 0 0 1 ${fmt(x+w)} ${fmt(y+r)} `+
+           `V ${fmt(y+h-r)} A ${fmt(r)} ${fmt(r)} 0 0 1 ${fmt(x+w-r)} ${fmt(y+h)} `+
+           `H ${fmt(x+r)} A ${fmt(r)} ${fmt(r)} 0 0 1 ${fmt(x)} ${fmt(y+h-r)} `+
+           `V ${fmt(y+r)} A ${fmt(r)} ${fmt(r)} 0 0 1 ${fmt(x+r)} ${fmt(y)} Z`;
+  }
+  function petalPath(cx,cy,length,width,angle){
+    const tipX=cx+length*Math.cos(angle), tipY=cy+length*Math.sin(angle);
+    const midX=cx+length*0.55*Math.cos(angle), midY=cy+length*0.55*Math.sin(angle);
+    const perp=angle+Math.PI/2;
+    const c1x=midX+width*Math.cos(perp), c1y=midY+width*Math.sin(perp);
+    const c2x=midX-width*Math.cos(perp), c2y=midY-width*Math.sin(perp);
+    return `M ${fmt(cx)} ${fmt(cy)} Q ${fmt(c1x)} ${fmt(c1y)} ${fmt(tipX)} ${fmt(tipY)} Q ${fmt(c2x)} ${fmt(c2y)} ${fmt(cx)} ${fmt(cy)} Z`;
+  }
+  function lineD(x1,y1,x2,y2){ return `M ${fmt(x1)} ${fmt(y1)} L ${fmt(x2)} ${fmt(y2)}`; }
+  function escapeXml(s){
+    return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[m]));
+  }
+
+  const PATTERNS = {
+    mandala: {
+      label:'Mandala',
+      params:[
+        {key:'size',label:'Średnica (mm)',type:'range',min:60,max:400,step:5,default:200},
+        {key:'petals',label:'Liczba elementów',type:'range',min:6,max:24,step:1,default:12},
+        {key:'layers',label:'Warstwy',type:'range',min:1,max:3,step:1,default:2},
+        {key:'petalWidth',label:'Szerokość elementów',type:'range',min:6,max:40,step:1,default:18},
+        {key:'rotation',label:'Obrót (°)',type:'range',min:0,max:360,step:5,default:0}
+      ],
+      generate(p){
+        const cx=p.size/2, cy=p.size/2, outerR=p.size/2-3, els=[];
+        for(let layer=0;layer<p.layers;layer++){
+          const layerR=outerR*(1-layer*0.27);
+          const len=layerR*0.85, wdt=len*(p.petalWidth/100);
+          const offset=(layer%2)*(Math.PI/p.petals);
+          for(let i=0;i<p.petals;i++){
+            const angle=(p.rotation*Math.PI/180)+offset+i*(2*Math.PI/p.petals);
+            els.push({type:'path', d:petalPath(cx,cy,len,wdt,angle), mode:'cut'});
+          }
+        }
+        els.push({type:'path', d:circlePath(cx,cy,outerR*0.07), mode:'cut'});
+        return {width:p.size, height:p.size, elements:els};
+      }
+    },
+    snowflake: {
+      label:'Śnieżynka',
+      params:[
+        {key:'size',label:'Średnica (mm)',type:'range',min:60,max:400,step:5,default:200},
+        {key:'arms',label:'Liczba ramion',type:'select',options:[{v:4,l:'4'},{v:5,l:'5'},{v:6,l:'6'},{v:8,l:'8'}],default:6},
+        {key:'branchLevels',label:'Poziomy odgałęzień',type:'range',min:1,max:4,step:1,default:2},
+        {key:'branchAngle',label:'Kąt odgałęzień (°)',type:'range',min:20,max:80,step:1,default:45},
+        {key:'branchRatio',label:'Długość odgałęzień',type:'range',min:0.2,max:0.9,step:0.05,default:0.5}
+      ],
+      generate(p){
+        const cx=p.size/2, cy=p.size/2, armLen=p.size/2-5, arms=Number(p.arms), els=[];
+        const ang=p.branchAngle*Math.PI/180;
+        for(let i=0;i<arms;i++){
+          const base=i*(2*Math.PI/arms);
+          const segs=[[[0,0],[armLen,0]]];
+          for(let lvl=1;lvl<=p.branchLevels;lvl++){
+            const t=lvl/(p.branchLevels+1), bx=armLen*t, blen=armLen*(1-t)*p.branchRatio;
+            segs.push([[bx,0],[bx+blen*Math.cos(ang), blen*Math.sin(ang)]]);
+            segs.push([[bx,0],[bx+blen*Math.cos(-ang), -blen*Math.sin(ang)]]);
+          }
+          segs.forEach(([[x1,y1],[x2,y2]])=>{
+            const rx1=x1*Math.cos(base)-y1*Math.sin(base), ry1=x1*Math.sin(base)+y1*Math.cos(base);
+            const rx2=x2*Math.cos(base)-y2*Math.sin(base), ry2=x2*Math.sin(base)+y2*Math.cos(base);
+            els.push({type:'path', d:lineD(cx+rx1,cy+ry1,cx+rx2,cy+ry2), mode:'cut'});
+          });
+        }
+        els.push({type:'path', d:circlePath(cx,cy,armLen*0.05), mode:'cut'});
+        return {width:p.size, height:p.size, elements:els};
+      }
+    },
+    star: {
+      label:'Gwiazda / ornament',
+      params:[
+        {key:'size',label:'Średnica (mm)',type:'range',min:60,max:400,step:5,default:200},
+        {key:'points',label:'Liczba ramion',type:'range',min:3,max:16,step:1,default:6},
+        {key:'innerRatio',label:'Promień wewnętrzny',type:'range',min:0.2,max:0.9,step:0.05,default:0.5},
+        {key:'rotation',label:'Obrót (°)',type:'range',min:0,max:360,step:5,default:0}
+      ],
+      generate(p){
+        const cx=p.size/2, cy=p.size/2, outerR=p.size/2-3, innerR=outerR*p.innerRatio;
+        const rot=(p.rotation-90)*Math.PI/180, pts=[];
+        for(let i=0;i<p.points*2;i++){
+          const r=i%2===0?outerR:innerR, a=rot+i*Math.PI/p.points;
+          pts.push(pt(cx+r*Math.cos(a), cy+r*Math.sin(a)));
+        }
+        return {width:p.size, height:p.size, elements:[{type:'path', d:pointsToPath(pts), mode:'cut'}]};
+      }
+    },
+    frame: {
+      label:'Ramka / podkładka',
+      params:[
+        {key:'shape',label:'Kształt',type:'select',options:[{v:'circle',l:'Koło'},{v:'square',l:'Kwadrat'},{v:'hexagon',l:'Sześciokąt'},{v:'octagon',l:'Ośmiokąt'}],default:'circle'},
+        {key:'size',label:'Wymiar zewnętrzny (mm)',type:'range',min:60,max:400,step:5,default:200},
+        {key:'borderWidth',label:'Szerokość ramki (mm)',type:'range',min:5,max:60,step:1,default:20},
+        {key:'dots',label:'Otwory dekoracyjne',type:'checkbox',default:true},
+        {key:'dotCount',label:'Liczba otworów',type:'range',min:6,max:36,step:1,default:16}
+      ],
+      generate(p){
+        const cx=p.size/2, cy=p.size/2, outerR=p.size/2-3, innerR=Math.max(outerR-p.borderWidth, outerR*0.2);
+        function shapeD(r){
+          switch(p.shape){
+            case 'square': return pointsToPath(polygonPoints(cx,cy,4,r,45));
+            case 'hexagon': return pointsToPath(polygonPoints(cx,cy,6,r,-90));
+            case 'octagon': return pointsToPath(polygonPoints(cx,cy,8,r,-90));
+            default: return circlePath(cx,cy,r);
+          }
+        }
+        const els=[
+          {type:'path', d:shapeD(outerR), mode:'cut'},
+          {type:'path', d:shapeD(innerR), mode:'cut'}
+        ];
+        if(p.dots){
+          const ringR=(outerR+innerR)/2, dotR=p.borderWidth*0.13;
+          for(let i=0;i<p.dotCount;i++){
+            const a=i*(2*Math.PI/p.dotCount);
+            els.push({type:'path', d:circlePath(cx+ringR*Math.cos(a), cy+ringR*Math.sin(a), dotR), mode:'cut'});
+          }
+        }
+        return {width:p.size, height:p.size, elements:els};
+      }
+    },
+    nameplate: {
+      label:'Napis / tabliczka',
+      params:[
+        {key:'text',label:'Tekst',type:'text',default:'Twój napis'},
+        {key:'width',label:'Szerokość (mm)',type:'range',min:60,max:500,step:5,default:240},
+        {key:'height',label:'Wysokość (mm)',type:'range',min:30,max:250,step:5,default:90},
+        {key:'fontFamily',label:'Czcionka',type:'select',options:[
+          {v:'"Playfair Display", serif',l:'Playfair Display'},
+          {v:'"Dancing Script", cursive',l:'Dancing Script'},
+          {v:'"Great Vibes", cursive',l:'Great Vibes'},
+          {v:'"Montserrat", sans-serif',l:'Montserrat'},
+          {v:'"Inter", sans-serif',l:'Inter'}
+        ],default:'"Playfair Display", serif'},
+        {key:'fontSize',label:'Wielkość czcionki (mm)',type:'range',min:10,max:100,step:1,default:32},
+        {key:'mode',label:'Tryb tekstu',type:'select',options:[{v:'engrave',l:'Grawerowanie (wypełnienie)'},{v:'cut',l:'Wycinanie (kontur)'}],default:'engrave'},
+        {key:'borderStyle',label:'Obramowanie',type:'select',options:[{v:'none',l:'Brak'},{v:'rectangle',l:'Prostokąt'},{v:'rounded',l:'Zaokrąglony prostokąt'},{v:'oval',l:'Owal'}],default:'rounded'}
+      ],
+      generate(p){
+        const w=p.width, h=p.height, els=[], r=Math.min(w,h)*0.12;
+        if(p.borderStyle==='rectangle') els.push({type:'path', d:pointsToPath([[3,3],[w-3,3],[w-3,h-3],[3,h-3]]), mode:'cut'});
+        else if(p.borderStyle==='rounded') els.push({type:'path', d:roundedRectPath(3,3,w-6,h-6,r), mode:'cut'});
+        else if(p.borderStyle==='oval') els.push({type:'path', d:ellipsePath(w/2,h/2,w/2-3,h/2-3), mode:'cut'});
+        els.push({type:'text', x:w/2, y:h/2+p.fontSize*0.34, anchor:'middle', content:p.text, fontFamily:p.fontFamily, fontSize:p.fontSize, mode:p.mode});
+        return {width:w, height:h, elements:els};
+      }
+    }
+  };
+
+  let currentPattern='mandala';
+  const values={};
+  function initValues(key){ const v={}; PATTERNS[key].params.forEach(prm=>{ v[prm.key]=prm.default; }); return v; }
+  values[currentPattern]=initValues(currentPattern);
+
+  const tabsEl=document.getElementById('tabs');
+  Object.keys(PATTERNS).forEach(key=>{
+    const btn=document.createElement('button');
+    btn.type='button'; btn.textContent=PATTERNS[key].label; btn.dataset.key=key;
+    btn.className=key===currentPattern?'tab active':'tab';
+    btn.addEventListener('click', ()=>{
+      currentPattern=key;
+      if(!values[key]) values[key]=initValues(key);
+      document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active', b.dataset.key===key));
+      renderControls(); regenerate();
+    });
+    tabsEl.appendChild(btn);
+  });
+
+  const controlsEl=document.getElementById('controls');
+  function renderControls(){
+    controlsEl.innerHTML='';
+    const v=values[currentPattern];
+    PATTERNS[currentPattern].params.forEach(prm=>{
+      const group=document.createElement('div');
+      group.className='ctrl-group';
+
+      if(prm.type==='checkbox'){
+        const lbl=document.createElement('label'); lbl.className='checkbox-label';
+        const input=document.createElement('input'); input.type='checkbox'; input.checked=!!v[prm.key];
+        input.addEventListener('change', ()=>{ v[prm.key]=input.checked; regenerate(); });
+        const span=document.createElement('span'); span.textContent=prm.label;
+        lbl.appendChild(input); lbl.appendChild(span); group.appendChild(lbl);
+        controlsEl.appendChild(group);
+        return;
+      }
+
+      const label=document.createElement('label'); label.textContent=prm.label; group.appendChild(label);
+      let input;
+      if(prm.type==='range'){
+        const wrap=document.createElement('div'); wrap.className='range-wrap';
+        input=document.createElement('input'); input.type='range';
+        input.min=prm.min; input.max=prm.max; input.step=prm.step; input.value=v[prm.key];
+        const out=document.createElement('span'); out.className='range-val'; out.textContent=v[prm.key];
+        input.addEventListener('input', ()=>{ v[prm.key]=Number(input.value); out.textContent=input.value; regenerate(); });
+        wrap.appendChild(input); wrap.appendChild(out); group.appendChild(wrap);
+      } else if(prm.type==='select'){
+        input=document.createElement('select');
+        prm.options.forEach(opt=>{
+          const o=document.createElement('option'); o.value=opt.v; o.textContent=opt.l;
+          if(String(opt.v)===String(v[prm.key])) o.selected=true;
+          input.appendChild(o);
+        });
+        input.addEventListener('change', ()=>{ v[prm.key]=input.value; regenerate(); });
+        group.appendChild(input);
+      } else if(prm.type==='text'){
+        input=document.createElement('input'); input.type='text'; input.value=v[prm.key]; input.maxLength=60;
+        input.addEventListener('input', ()=>{ v[prm.key]=input.value; regenerate(); });
+        group.appendChild(input);
+      }
+      controlsEl.appendChild(group);
+    });
+  }
+
+  const canvas=document.getElementById('canvas');
+  const metaEl=document.getElementById('meta');
+
+  function elementToMarkup(el, strokeWidth){
+    if(el.type==='path'){
+      if(el.mode==='engrave') return `<path d="${el.d}" fill="#1c1c1c" stroke="none"/>`;
+      return `<path d="${el.d}" fill="none" stroke="#ff2d2d" stroke-width="${strokeWidth}" vector-effect="non-scaling-stroke"/>`;
+    }
+    if(el.type==='text'){
+      const common=`x="${fmt(el.x)}" y="${fmt(el.y)}" text-anchor="${el.anchor||'middle'}" font-family='${el.fontFamily}' font-size="${el.fontSize}"`;
+      if(el.mode==='engrave') return `<text ${common} fill="#1c1c1c" stroke="none">${escapeXml(el.content)}</text>`;
+      return `<text ${common} fill="none" stroke="#ff2d2d" stroke-width="${strokeWidth}" vector-effect="non-scaling-stroke">${escapeXml(el.content)}</text>`;
+    }
+    return '';
+  }
+
+  function pathLength(d){
+    try{ const p=document.createElementNS(SVG_NS,'path'); p.setAttribute('d', d); return p.getTotalLength(); }
+    catch(e){ return 0; }
+  }
+
+  function regenerate(){
+    const def=PATTERNS[currentPattern];
+    const v=values[currentPattern];
+    const result=def.generate(v);
+    const vbW=result.width, vbH=result.height;
+    canvas.setAttribute('viewBox', `0 0 ${vbW} ${vbH}`);
+    canvas.setAttribute('width', vbW+'mm');
+    canvas.setAttribute('height', vbH+'mm');
+
+    const strokeWidth=fmt(Math.max(vbW,vbH)*0.0025);
+    canvas.innerHTML=result.elements.map(el=>elementToMarkup(el, strokeWidth)).join('');
+
+    let totalLen=0;
+    result.elements.forEach(el=>{ if(el.type==='path' && el.mode==='cut') totalLen+=pathLength(el.d); });
+    metaEl.innerHTML=`
+      <div class="meta-row"><span>Wymiary</span><strong>${fmt(result.width)} × ${fmt(result.height)} mm</strong></div>
+      <div class="meta-row"><span>Długość linii cięcia</span><strong>${(totalLen/10).toFixed(1)} cm</strong></div>
+    `;
+    canvas.dataset.svgWidth=result.width;
+    canvas.dataset.svgHeight=result.height;
+  }
+
+  document.getElementById('downloadBtn').addEventListener('click', ()=>{
+    const w=canvas.dataset.svgWidth, h=canvas.dataset.svgHeight;
+    const svgStr=`<?xml version="1.0" encoding="UTF-8"?>\n`+
+      `<svg xmlns="${SVG_NS}" viewBox="0 0 ${w} ${h}" width="${w}mm" height="${h}mm">${canvas.innerHTML}</svg>`;
+    const blob=new Blob([svgStr], {type:'image/svg+xml'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download=`wzor-${currentPattern}-${Date.now()}.svg`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  renderControls();
+  regenerate();
+})();
+</script>
+</body>
+</html>
