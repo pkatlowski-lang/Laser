@@ -109,6 +109,15 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 .tpl button{padding:9px 6px;border-radius:7px;border:1.5px solid var(--border);background:var(--surface2);color:var(--text);font-size:.76rem;font-weight:600;cursor:pointer}
 .tpl button:hover{border-color:var(--accent);color:var(--accent)}
 
+/* ---- Gallery of bases ---- */
+.gallery{display:grid;grid-template-columns:1fr 1fr;gap:7px;padding:0 14px 10px}
+.gallery-card{position:relative;background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:8px 6px 7px;cursor:pointer;text-align:center;font-size:.7rem;color:var(--text);font-weight:600;display:flex;flex-direction:column;align-items:center;gap:4px;transition:border-color .15s,color .15s}
+.gallery-card:hover{border-color:var(--accent);color:var(--accent)}
+.gallery-card svg{width:44px;height:44px;pointer-events:none;overflow:visible}
+.gallery-card .del-base{position:absolute;top:3px;right:4px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:.75rem;padding:1px 4px;line-height:1;border-radius:4px;z-index:1}
+.gallery-card .del-base:hover{color:var(--cut);background:rgba(255,255,255,.08)}
+.gallery-upload-btn{margin:0 14px 16px;width:calc(100% - 28px);justify-content:center;cursor:pointer;font-size:.76rem}
+
 .legend{display:flex;gap:14px;flex-wrap:wrap;padding:10px 16px;border-top:1px solid var(--border);font-size:.72rem;color:var(--muted)}
 .legend span{display:inline-flex;align-items:center;gap:6px}
 .legend i{width:13px;height:13px;border-radius:3px;display:inline-block}
@@ -159,6 +168,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
       <button type="button" class="tbtn addparam" id="addParamBtn">+ Dodaj parametr</button>
       <h2>Szablony startowe</h2>
       <div class="tpl" id="templates"></div>
+      <h2>Galeria baz podstawowych</h2>
+      <div class="gallery" id="gallery"></div>
+      <label class="tbtn gallery-upload-btn" title="Wrzuć własny kształt SVG jako bazę">
+        📤 Wrzuć własną bazę (SVG)
+        <input type="file" id="galleryUpload" accept=".svg,image/svg+xml" style="display:none">
+      </label>
       <h2>Warstwy</h2>
       <div class="layers" id="layers"></div>
       <div class="legend">
@@ -1364,8 +1379,198 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     pushHistory(); renderAll(); renderProps(); zoomFit();
   }); tplEl.appendChild(b); });
 
+  /* ---------------- Gallery of bases ---------------- */
+
+  /* Scale all coordinate values in an SVG path d-string by factor s.
+     Arc flags (large-arc, sweep) are preserved unchanged. */
+  function scalePathD(d, s){
+    if(Math.abs(s-1) < 1e-9) return d;
+    const NUM = /-?\d*\.?\d+(?:[eE][-+]?\d+)?/g;
+    return d.replace(/([MmLlHhVvCcSsQqTtAa])([^MmLlHhVvCcSsQqTtAaZz]*)/g, (_, cmd, argsStr) => {
+      const C = cmd.toUpperCase();
+      const nums = (argsStr.match(NUM) || []).map(Number);
+      if(!nums.length) return cmd;
+      let scaled;
+      if(C === 'A'){
+        scaled = [];
+        for(let i=0; i+6<nums.length; i+=7){
+          scaled.push(nums[i]*s, nums[i+1]*s, nums[i+2], nums[i+3], nums[i+4], nums[i+5]*s, nums[i+6]*s);
+        }
+      } else {
+        scaled = nums.map(n => n*s);
+      }
+      return cmd + ' ' + scaled.map(fmt).join(' ');
+    });
+  }
+
+  /* Convert a single SVG shape element to a path d-string fragment. */
+  function svgShapeElToD(el){
+    const tag = el.tagName.toLowerCase().replace(/^.*:/, '');
+    const num = a => parseFloat(el.getAttribute(a)) || 0;
+    switch(tag){
+      case 'path': return el.getAttribute('d') || '';
+      case 'rect': {
+        const x=num('x'), y=num('y'), w=num('width'), h=num('height');
+        if(!w || !h) return '';
+        const rx = el.hasAttribute('rx') ? num('rx') : (el.hasAttribute('ry') ? num('ry') : 0);
+        return roundedRectD(x, y, w, h, rx);
+      }
+      case 'circle': { const cx=num('cx'), cy=num('cy'), r=num('r'); return r ? ellipseD(cx,cy,r,r) : ''; }
+      case 'ellipse': { const cx=num('cx'), cy=num('cy'), rx=num('rx'), ry=num('ry'); return (rx&&ry)?ellipseD(cx,cy,rx,ry):''; }
+      case 'polygon': case 'polyline': {
+        const pts_str=(el.getAttribute('points')||'').trim(); if(!pts_str) return '';
+        const nums2=pts_str.split(/[\s,]+/).map(Number).filter(n=>!isNaN(n));
+        const pts=[]; for(let i=0;i+1<nums2.length;i+=2) pts.push([nums2[i],nums2[i+1]]);
+        return pts.length ? pts.map((p,i)=>(i?'L':'M')+fmt(p[0])+' '+fmt(p[1])).join('')+(tag==='polygon'?'Z':'') : '';
+      }
+      case 'line': return `M${fmt(num('x1'))} ${fmt(num('y1'))}L${fmt(num('x2'))} ${fmt(num('y2'))}`;
+      default: return '';
+    }
+  }
+
+  /* Import an SVG file: extract shapes, measure bbox, save as custom base. */
+  function importSvgFile(file){
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      const parser = new DOMParser();
+      const svgDoc = parser.parseFromString(e.target.result, 'image/svg+xml');
+      if(svgDoc.querySelector('parsererror')){ alert('Nieprawidłowy plik SVG'); return; }
+      const SHAPE_TAGS = new Set(['path','rect','circle','ellipse','polygon','polyline','line']);
+      const SKIP = new Set(['defs','symbol','clipPath','mask','filter','pattern']);
+      const parts = [];
+      function collect(node){
+        for(const child of node.children){
+          const tag = child.tagName.toLowerCase().replace(/^.*:/,'');
+          if(SKIP.has(tag)) continue;
+          if(SHAPE_TAGS.has(tag)){ const d=svgShapeElToD(child); if(d) parts.push(d); }
+          if(child.children.length) collect(child);
+        }
+      }
+      const svgRoot = svgDoc.querySelector('svg');
+      if(!svgRoot){ alert('Brak elementu SVG'); return; }
+      collect(svgRoot);
+      if(!parts.length){ alert('Brak rozpoznanych kształtów w pliku SVG'); return; }
+      const combinedD = parts.join(' ');
+      const tmpSvg = document.createElementNS(SVG_NS,'svg');
+      tmpSvg.style.cssText='position:absolute;left:-9999px;top:-9999px;visibility:hidden;width:0;height:0';
+      document.body.appendChild(tmpSvg);
+      const tmpPath = document.createElementNS(SVG_NS,'path');
+      tmpPath.setAttribute('d', combinedD);
+      tmpSvg.appendChild(tmpPath);
+      let bb; try{ bb=tmpPath.getBBox(); }catch(err){ bb={x:0,y:0,width:100,height:100}; }
+      document.body.removeChild(tmpSvg);
+      const base = {
+        id: 'cb_'+Math.random().toString(36).slice(2,10),
+        label: file.name.replace(/\.svg$/i,'').slice(0,24),
+        d: combinedD, fillRule:'evenodd',
+        bx:bb.x, by:bb.y, bw:Math.max(1,bb.width), bh:Math.max(1,bb.height),
+        custom:true
+      };
+      addCustomBase(base);
+    };
+    reader.readAsText(file);
+  }
+
+  /* Persist/load custom bases from localStorage. */
+  function loadCustomBases(){
+    try{ return JSON.parse(localStorage.getItem('laser_edytor_custom_bases_v1')||'[]'); }catch(e){ return []; }
+  }
+  function saveCustomBases(list){
+    try{ localStorage.setItem('laser_edytor_custom_bases_v1', JSON.stringify(list.filter(b=>b.custom))); }catch(e){}
+  }
+
+  /* Add shape from a base definition to canvas, scaled & centered. */
+  function addBaseToCanvas(base){
+    const maxDim = Math.max(base.bw, base.bh) || 1;
+    const target = Math.min(120, state.docW*0.7, state.docH*0.7);
+    const s = target / maxDim;
+    const scaledD = Math.abs(s-1) > 1e-6 ? scalePathD(base.d, s) : base.d;
+    const bx2=base.bx*s, by2=base.by*s, bw2=base.bw*s, bh2=base.bh*s;
+    addObject({
+      id:uid(), type:'path', name:base.label||'Baza',
+      d:scaledD, fillRule:base.fillRule||'evenodd',
+      bx:bx2, by:by2, bw:bw2, bh:bh2,
+      x:state.docW/2-(bx2+bw2/2), y:state.docH/2-(by2+bh2/2),
+      rotation:0, mode:'cut', visible:true, locked:false, repeat:{type:'none'}
+    });
+  }
+
+  function addCustomBase(base){
+    const customs = loadCustomBases(); customs.push(base); saveCustomBases(customs);
+    renderGallery(); addBaseToCanvas(base);
+  }
+  function removeCustomBase(id){
+    saveCustomBases(loadCustomBases().filter(b=>b.id!==id)); renderGallery();
+  }
+
+  /* Build the built-in base shapes using existing geometry helpers.
+     Measure real bbox via temporary off-screen SVG path.getBBox(). */
+  function buildBuiltInBases(){
+    const tmpSvg = document.createElementNS(SVG_NS,'svg');
+    tmpSvg.style.cssText='position:absolute;left:-9999px;top:-9999px;visibility:hidden;width:0;height:0';
+    document.body.appendChild(tmpSvg);
+    function mbox(d){ const p=document.createElementNS(SVG_NS,'path'); p.setAttribute('d',d); tmpSvg.appendChild(p);
+      let b; try{b=p.getBBox();}catch(e){b={x:0,y:0,width:100,height:100};} tmpSvg.removeChild(p);
+      return {bx:b.x,by:b.y,bw:Math.max(1,b.width),bh:Math.max(1,b.height)}; }
+    const defs = [
+      {id:'bb_rect_tag',  label:'Zawieszka prostokątna', fillRule:'evenodd',
+        d: roundedRectD(0,0,100,50,8)+' '+ellipseD(50,8,4,4)},
+      {id:'bb_round_tag', label:'Zawieszka okrągła',     fillRule:'evenodd',
+        d: ellipseD(40,40,40,40)+' '+ellipseD(40,5,4,4)},
+      {id:'bb_heart',     label:'Serce',                 fillRule:'nonzero',
+        d:'M50 35 C60 10 90 15 90 40 C90 65 50 85 50 85 C50 85 10 65 10 40 C10 15 40 10 50 35 Z'},
+      {id:'bb_hex',       label:'Sześciokąt',            fillRule:'nonzero',
+        d: polyD(50,50,50,50,6,-90)},
+      {id:'bb_oct',       label:'Ośmiokąt',              fillRule:'nonzero',
+        d: polyD(50,50,50,50,8,-22.5)},
+      {id:'bb_star6',     label:'Gwiazda 6-rka',         fillRule:'nonzero',
+        d: starD(50,50,50,50,6,0.5,-90)},
+      {id:'bb_bookmark',  label:'Zakładka',              fillRule:'evenodd',
+        d: roundedRectD(0,0,40,120,6)+' '+ellipseD(20,8,4,4)},
+      {id:'bb_plaque',    label:'Tabliczka',             fillRule:'nonzero',
+        d: roundedRectD(0,0,150,70,14)},
+      {id:'bb_coaster_sq',label:'Podkładka kwadratowa',  fillRule:'nonzero',
+        d: roundedRectD(0,0,100,100,14)},
+      {id:'bb_ornament',  label:'Bombka',                fillRule:'evenodd',
+        d: ellipseD(50,55,45,45)+' '+roundedRectD(44,4,12,16,3)},
+    ];
+    const result = defs.map(def => { const m=mbox(def.d); return {...def,...m,custom:false}; });
+    document.body.removeChild(tmpSvg);
+    return result;
+  }
+
+  const BUILT_IN_BASES = buildBuiltInBases();
+
+  /* Render gallery HTML and wire up click handlers. */
+  const galleryEl = document.getElementById('gallery');
+  function renderGallery(){
+    const customs = loadCustomBases();
+    const all = [...BUILT_IN_BASES, ...customs];
+    galleryEl.innerHTML = all.map(base => {
+      const vx=fmt(base.bx), vy=fmt(base.by), vw=fmt(base.bw), vh=fmt(base.bh);
+      const del = base.custom ? `<button class="del-base" data-del="${base.id}" title="Usuń tę bazę">✕</button>` : '';
+      const fr = base.fillRule==='evenodd' ? ' fill-rule="evenodd"' : '';
+      return `<div class="gallery-card" data-base-id="${base.id}">${del}<svg viewBox="${vx} ${vy} ${vw} ${vh}" xmlns="http://www.w3.org/2000/svg"><path d="${escapeXml(base.d)}" fill="none" stroke="var(--accent)" stroke-width="1.5" vector-effect="non-scaling-stroke"${fr}/></svg><span>${escapeXml(base.label)}</span></div>`;
+    }).join('');
+    galleryEl.querySelectorAll('.gallery-card').forEach(card => {
+      const id = card.getAttribute('data-base-id');
+      card.addEventListener('click', ev => {
+        if(ev.target.classList.contains('del-base')) return;
+        const base = all.find(b=>b.id===id); if(base) addBaseToCanvas(base);
+      });
+    });
+    galleryEl.querySelectorAll('.del-base').forEach(btn => {
+      btn.addEventListener('click', ev => { ev.stopPropagation(); removeCustomBase(btn.getAttribute('data-del')); });
+    });
+  }
+
+  document.getElementById('galleryUpload').addEventListener('change', e => {
+    const f=e.target.files[0]; if(f) importSvgFile(f); e.target.value='';
+  });
+
   /* ---------------- Init ---------------- */
-  buildCanvasSkeleton(); syncViewAspect(); zoomFit(); renderGrid(); renderAll(); renderProps(); renderParams();
+  buildCanvasSkeleton(); syncViewAspect(); zoomFit(); renderGrid(); renderAll(); renderProps(); renderParams(); renderGallery();
   updateCanvasCursor();
   pushHistory();
   window.addEventListener('resize',()=>{ syncViewAspect(); applyView(); renderOverlay(); });
