@@ -157,33 +157,47 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 .p3d-controls input[type=range]{width:120px;accent-color:var(--accent)}
 .p3d-controls b{color:var(--text);min-width:22px;display:inline-block}
 
-/* ---- Live 3D dock (przy płótnie) ---- */
-.live3d{position:absolute;right:14px;bottom:14px;width:230px;background:rgba(10,10,18,.86);backdrop-filter:blur(6px);border:1px solid var(--border);border-radius:11px;box-shadow:0 8px 28px rgba(0,0,0,.5);z-index:6;overflow:hidden;transition:width .15s}
-.live3d-head{display:flex;align-items:center;gap:6px;padding:7px 10px;font-size:.74rem;font-weight:700;color:var(--text);cursor:grab;border-bottom:1px solid var(--border);user-select:none}
-.live3d-head .l3d-title{flex:1}
-.live3d-head button{background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem;padding:2px 5px;border-radius:4px;line-height:1}
-.live3d-head button:hover{color:var(--accent);background:rgba(255,255,255,.07)}
-.live3d-stage{perspective:900px;height:190px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:radial-gradient(ellipse 70% 60% at 50% 60%,#161636 0%,#06060c 100%);cursor:grab}
+/* ---- Bottom dock (stały podgląd 3D + plik SVG) ---- */
+.bottombar{flex:0 0 248px;display:flex;gap:1px;background:var(--border);border-top:2px solid var(--accent-dark);position:relative;transition:flex-basis .18s}
+.bottombar.collapsed{flex-basis:30px}
+.bottombar.collapsed .bb-sec{display:none}
+.bb-tab{position:absolute;top:-22px;right:16px;height:22px;padding:0 14px;border:1px solid var(--border);border-bottom:none;background:var(--surface);color:var(--accent);font-size:.7rem;font-weight:700;cursor:pointer;border-radius:7px 7px 0 0;z-index:3}
+.bb-sec{flex:1;background:var(--surface);display:flex;flex-direction:column;min-width:0}
+.bb-head{display:flex;align-items:center;gap:8px;padding:7px 12px;font-size:.74rem;font-weight:700;color:var(--text);border-bottom:1px solid var(--border)}
+.bb-spacer{flex:1}
+.bb-btn{border:1.5px solid var(--border);background:var(--surface2);color:var(--text);font-size:.72rem;font-weight:600;padding:4px 10px;border-radius:6px;cursor:pointer}
+.bb-btn:hover{border-color:var(--accent);color:var(--accent)}
+.live3d-stage{flex:1;perspective:1100px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:radial-gradient(ellipse 65% 60% at 50% 58%,#171738 0%,#05050b 100%);cursor:grab}
 .live3d-stage.l3d-dragging{cursor:grabbing}
 .live3d-scene{transform-style:preserve-3d;position:relative}
-.live3d.collapsed{width:auto}
-.live3d.collapsed .live3d-stage,.live3d.collapsed .live3d-foot{display:none}
-.live3d-foot{padding:5px 10px 8px;display:flex;align-items:center;gap:6px;font-size:.68rem;color:var(--muted)}
-.live3d-foot input[type=range]{flex:1;accent-color:var(--accent);height:4px}
 .l3d-layer{position:absolute;top:0;left:0;transform-style:preserve-3d}
 .l3d-layer svg{display:block}
+.bb-svg{flex:1;overflow:auto;background:#0e0e16;display:flex;align-items:center;justify-content:center;padding:10px}
+.bb-svg svg{max-width:100%;max-height:100%;background:#fff;border-radius:4px}
+.bb-svg .bb-empty{color:#555;font-size:.74rem}
 
 .legend{display:flex;gap:14px;flex-wrap:wrap;padding:10px 16px;border-top:1px solid var(--border);font-size:.72rem;color:var(--muted)}
 .legend span{display:inline-flex;align-items:center;gap:6px}
 .legend i{width:13px;height:13px;border-radius:3px;display:inline-block}
 .li-cut{background:none;border:2px solid var(--cut)} .li-eng{background:var(--engrave);border:1px solid #666} .li-sco{background:none;border:2px dashed var(--score)}
 
-/* ---- Depth 3D legend chips ---- */
-.depth-legend{display:flex;flex-wrap:wrap;gap:5px;padding:4px 14px 10px}
-.dl-chip{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:5px;cursor:pointer;font-size:.73rem;font-weight:700;color:#fff;user-select:none;transition:filter .15s,opacity .15s;border:none;line-height:1}
-.dl-chip:hover{filter:brightness(1.22)}
-.dl-chip.depth-hidden{opacity:.32;text-decoration:line-through}
-.dl-note{padding:2px 14px 6px;font-size:.71rem;color:var(--muted);line-height:1.45}
+/* ---- Manager warstw 3D ---- */
+.depth-legend{display:flex;flex-direction:column;gap:5px;padding:4px 14px 8px}
+.dl-empty{font-size:.72rem;color:var(--muted);line-height:1.5}
+.lyr-row{display:flex;align-items:center;gap:6px;padding:4px 6px;border:1.5px solid var(--border);border-radius:7px;background:var(--surface2)}
+.lyr-row.on{border-color:var(--accent)}
+.lyr-row.lyr-hidden{opacity:.5}
+.lyr-pick{border:none;color:#fff;font-size:.72rem;font-weight:700;padding:4px 9px;border-radius:5px;cursor:pointer;flex:0 0 auto}
+.lyr-pick:hover{filter:brightness(1.2)}
+.lyr-cnt{font-size:.68rem;color:var(--muted);flex:1;white-space:nowrap}
+.lyr-mm{width:50px;flex:0 0 50px;padding:3px 5px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:.74rem;font-family:inherit}
+.lyr-unit{font-size:.66rem;color:var(--muted)}
+.lyr-eye{background:none;border:none;cursor:pointer;font-size:.85rem;padding:2px;line-height:1}
+.dl-note{padding:2px 14px 8px;font-size:.71rem;color:var(--muted);line-height:1.45}
+.layer-assign{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.la-btn{border:1.5px solid var(--border);border-radius:6px;padding:4px 9px;font-size:.72rem;font-weight:700;color:#fff;cursor:pointer;line-height:1}
+.la-btn.on{outline:2px solid var(--accent);outline-offset:1px}
+.la-btn.la-new{background:var(--surface2);color:var(--accent)}
 
 @media(max-width:1040px){.panel{flex-basis:230px}}
 @media(max-width:820px){
@@ -241,7 +255,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
       </label>
       <h2>Warstwy 3D</h2>
       <div class="depth-legend" id="depthLegend"></div>
-      <p class="dl-note">Kliknij chip = zaznacz całą warstwę · Shift+klik = ukryj/pokaż</p>
+      <p class="dl-note">W{n} = zaznacz warstwę · pole mm = grubość materiału · 👁 = ukryj. Grubsza warstwa jest wyżej w wizualizacji 3D.</p>
       <h2>Kolejność elementów</h2>
       <div class="layers" id="layers"></div>
       <div class="legend">
@@ -254,15 +268,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     <section class="stage">
       <svg id="canvas" xmlns="http://www.w3.org/2000/svg"></svg>
       <div class="hint-empty" id="hintEmpty">Wybierz narzędzie i narysuj kształt na płycie — albo kliknij szablon po lewej</div>
-      <div class="live3d" id="live3d">
-        <div class="live3d-head" id="live3dHead">
-          <span>🧊</span><span class="l3d-title">Podgląd 3D</span>
-          <button id="live3dExpand" title="Powiększ podgląd">⛶</button>
-          <button id="live3dToggle" title="Zwiń / rozwiń">▾</button>
-        </div>
-        <div class="live3d-stage" id="live3dStage"><div class="live3d-scene" id="live3dScene"></div></div>
-        <div class="live3d-foot">grubość<input type="range" id="live3dThick" min="3" max="40" value="14"></div>
-      </div>
     </section>
 
     <aside class="panel right">
@@ -270,15 +275,31 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
       <div id="props"></div>
     </aside>
   </div>
+
+  <div class="bottombar" id="bottombar">
+    <button class="bb-tab" id="bbTab" title="Pokaż / ukryj dolny podgląd">▾ podgląd</button>
+    <div class="bb-sec">
+      <div class="bb-head"><span>🧊 Wizualizacja 3D — stos warstw materiału</span>
+        <span class="bb-spacer"></span>
+        <button class="bb-btn" id="live3dExpand" title="Powiększ na cały ekran">⛶ Powiększ</button>
+      </div>
+      <div class="live3d-stage" id="live3dStage"><div class="live3d-scene" id="live3dScene"></div></div>
+    </div>
+    <div class="bb-sec">
+      <div class="bb-head"><span>📄 Plik SVG — warstwy rozdzielone (1 plik)</span>
+        <span class="bb-spacer"></span>
+        <button class="bb-btn" id="bbDownload" title="Pobierz rozdzielony plik SVG">⬇ Pobierz SVG warstw</button>
+      </div>
+      <div class="bb-svg" id="bbSvg"></div>
+    </div>
+  </div>
 </div>
 
 <div class="modal-ov" id="modal3dPrev">
   <div class="modal-box" style="max-width:860px">
     <button class="modal-close" id="modal3dPrevClose" title="Zamknij">✕</button>
     <h3>🎯 Wizualizacja 3D projektu</h3>
-    <div class="p3d-controls">
-      <label>Grubość warstwy:&nbsp;<input type="range" id="p3dThick" min="4" max="70" value="24">&nbsp;<b id="p3dThickV">24</b>&nbsp;px</label>
-    </div>
+    <div class="p3d-controls">Grubości warstw ustawiasz w mm w panelu „Warstwy 3D” po lewej — model 3D odwzorowuje je proporcjonalnie.</div>
     <div class="preview3d-wrap" id="p3dWrap">
       <div class="preview3d-scene" id="p3dScene"></div>
     </div>
@@ -327,8 +348,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     view:{x:-20,y:-20,w:340,h:240},
     params:[{id:'p_grubosc',name:'grubość_materiału',value:3,min:1,max:12,step:0.5}],
     history:[], hIndex:-1,
-    depthView:false, hiddenDepths:[]
+    depthView:true, hiddenDepths:[],
+    layerMM:{}
   };
+  function layerMM(dep){ const v=state.layerMM[dep]; return (v==null||isNaN(v))?3:v; }
+  function setLayerMM(dep,mm){ state.layerMM[dep]=Math.max(0.5,Math.min(60,Number(mm)||3)); }
 
   const TOOLS=[
     {key:'select',label:'Wskaźnik',ico:'↖'},
@@ -412,7 +436,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
   function innerGeometry(o, forExport){
     if(o.type==='path'){
       const lcx=(o.bx||0)+(o.bw||0)/2, lcy=(o.by||0)+(o.bh||0)/2;
-      const t=`translate(${fmt(o.x||0)} ${fmt(o.y||0)}) rotate(${fmt(o.rotation||0)} ${fmt(lcx)} ${fmt(lcy)})`;
+      const sx=o.sx||1, sy=o.sy||1;
+      const scalePart=(sx!==1||sy!==1)?` translate(${fmt(lcx)} ${fmt(lcy)}) scale(${fmt(sx)} ${fmt(sy)}) translate(${fmt(-lcx)} ${fmt(-lcy)})`:'';
+      const t=`translate(${fmt(o.x||0)} ${fmt(o.y||0)}) rotate(${fmt(o.rotation||0)} ${fmt(lcx)} ${fmt(lcy)})${scalePart}`;
       const fr=o.fillRule==='evenodd'?' fill-rule="evenodd"':'';
       let geo;
       if(_silFill){ geo=`<path d="${o.d}" fill="${_silFill}" stroke="none"${fr}/>`; }
@@ -495,7 +521,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 
   // measured/analytic local (unrotated) bbox of an object
   function objBBox(o){
-    if(o.type==='path'){ return {x:(o.bx||0)+(o.x||0), y:(o.by||0)+(o.y||0), w:o.bw||1, h:o.bh||1}; }
+    if(o.type==='path'){
+      const sx=o.sx||1, sy=o.sy||1, cx=(o.bx||0)+(o.bw||0)/2, cy=(o.by||0)+(o.bh||0)/2;
+      const w=(o.bw||1)*sx, h=(o.bh||1)*sy;
+      return {x:(o.x||0)+cx-w/2, y:(o.y||0)+cy-h/2, w, h};
+    }
     if(o.type==='text'){
       const el=gObjects.querySelector(`[data-id="${o.id}"] text`);
       if(el){ try{ const b=el.getBBox(); return {x:b.x,y:b.y,w:b.width,h:b.height}; }catch(e){} }
@@ -543,12 +573,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     s+=`<line class="sel-rot-line" x1="${fmt(c.x)}" y1="${fmt(b.y)}" x2="${fmt(c.x)}" y2="${fmt(rotY)}"/>`;
     s+=`<circle class="sel-rot" cx="${fmt(c.x)}" cy="${fmt(rotY)}" r="${fmt(hr*1.25)}" style="pointer-events:none"/>`;
     s+=`<circle cx="${fmt(c.x)}" cy="${fmt(rotY)}" r="${fmt(hit)}" fill="transparent" data-handle="rot"/>`;
-    if(o.type!=='path'){ // wynik operacji boolowskiej: tylko obrót i przesuwanie (bez skalowania uchwytami)
-      hs.forEach(([k,hx,hy])=>{
-        s+=`<rect class="sel-handle" x="${fmt(hx-hr)}" y="${fmt(hy-hr)}" width="${fmt(hr*2)}" height="${fmt(hr*2)}" style="pointer-events:none"/>`;
-        s+=`<rect x="${fmt(hx-hit)}" y="${fmt(hy-hit)}" width="${fmt(hit*2)}" height="${fmt(hit*2)}" fill="transparent" data-handle="${k}"/>`;
-      });
-    }
+    hs.forEach(([k,hx,hy])=>{
+      s+=`<rect class="sel-handle" x="${fmt(hx-hr)}" y="${fmt(hy-hr)}" width="${fmt(hr*2)}" height="${fmt(hr*2)}" style="pointer-events:none"/>`;
+      s+=`<rect x="${fmt(hx-hit)}" y="${fmt(hy-hit)}" width="${fmt(hit*2)}" height="${fmt(hit*2)}" fill="transparent" data-handle="${k}"/>`;
+    });
     s+=`</g>`+guideLinesMarkup();
     gOverlay.innerHTML=s;
   }
@@ -688,13 +716,43 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
       pts.push([p.x+Math.sin((i+1)*12.9898)*EPS, p.y+Math.cos((i+1)*78.233)*EPS]); }
     if(o.type==='path'){
       const lcx=(o.bx||0)+(o.bw||0)/2, lcy=(o.by||0)+(o.bh||0)/2, r=deg2rad(o.rotation||0);
-      for(const pt of pts){ const rp=rotatePt(pt[0],pt[1],lcx,lcy,r); pt[0]=rp.x+(o.x||0); pt[1]=rp.y+(o.y||0); }
+      const sx=o.sx||1, sy=o.sy||1;
+      for(const pt of pts){ let px=lcx+(pt[0]-lcx)*sx, py=lcy+(pt[1]-lcy)*sy; const rp=rotatePt(px,py,lcx,lcy,r); pt[0]=rp.x+(o.x||0); pt[1]=rp.y+(o.y||0); }
     } else if(o.rotation){
       const c={x:o.x+o.w/2,y:o.y+o.h/2}, r=deg2rad(o.rotation);
       for(const pt of pts){ const rp=rotatePt(pt[0],pt[1],c.x,c.y,r); pt[0]=rp.x; pt[1]=rp.y; }
     }
     return pts;
   }
+  // Przekształca punkty z przestrzeni lokalnej obiektu do dokumentu (skala/obrót/przesunięcie).
+  function transformObjPts(o, pts){
+    if(o.type==='path'){
+      const lcx=(o.bx||0)+(o.bw||0)/2, lcy=(o.by||0)+(o.bh||0)/2, r=deg2rad(o.rotation||0), sx=o.sx||1, sy=o.sy||1;
+      for(const pt of pts){ let px=lcx+(pt[0]-lcx)*sx, py=lcy+(pt[1]-lcy)*sy; const rp=rotatePt(px,py,lcx,lcy,r); pt[0]=rp.x+(o.x||0); pt[1]=rp.y+(o.y||0); }
+    } else if(o.rotation){
+      const c={x:o.x+o.w/2,y:o.y+o.h/2}, r=deg2rad(o.rotation);
+      for(const pt of pts){ const rp=rotatePt(pt[0],pt[1],c.x,c.y,r); pt[0]=rp.x; pt[1]=rp.y; }
+    }
+    return pts;
+  }
+  // Zwraca OSOBNY wielokąt dla każdej subścieżki (M...) — dzięki temu otwory nie tworzą zygzaków.
+  function objSubPolys(o){
+    let d;
+    if(o.type==='path') d=o.d; else if(BOOL_TYPES.includes(o.type)) d=shapeD(o); else return [];
+    if(!d) return [];
+    const subs=d.match(/[Mm][^Mm]*/g)||[d];
+    const out=[];
+    for(const sd of subs){
+      const path=document.createElementNS(SVG_NS,'path'); path.setAttribute('d',sd);
+      let len; try{ len=path.getTotalLength(); }catch(e){ continue; }
+      if(len<0.5) continue;
+      const n=Math.max(24,Math.min(480,Math.ceil(len/0.6))), pts=[];
+      for(let i=0;i<n;i++){ const p=path.getPointAtLength(len*i/n); pts.push([p.x,p.y]); }
+      out.push(transformObjPts(o, pts));
+    }
+    return out;
+  }
+  function polyCentroid(poly){ let x=0,y=0; for(const p of poly){ x+=p[0]; y+=p[1]; } return [x/poly.length, y/poly.length]; }
   function polyToPathD(poly){ return poly.map((p,i)=>(i?'L':'M')+fmt(p[0])+' '+fmt(p[1])).join('')+'Z'; }
   function polysBBoxMulti(polys){ let a={minx:Infinity,miny:Infinity,maxx:-Infinity,maxy:-Infinity};
     polys.forEach(pl=>pl.forEach(p=>{ a.minx=Math.min(a.minx,p[0]); a.miny=Math.min(a.miny,p[1]); a.maxx=Math.max(a.maxx,p[0]); a.maxy=Math.max(a.maxy,p[1]); })); return a; }
@@ -1000,20 +1058,27 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
       return;
     }
     const rot=d.rot, c=d.c, b=d.b, h=d.handle;
+    let nx,ny,nw,nh;
     if(rot===0){
       let x0=b.x,y0=b.y,x1=b.x+b.w,y1=b.y+b.h;
       const px=snap(docP.x), py=snap(docP.y);
       if(h.includes('w')) x0=px; if(h.includes('e')) x1=px;
       if(h.includes('n')) y0=py; if(h.includes('s')) y1=py;
-      let nx=Math.min(x0,x1), ny=Math.min(y0,y1), nw=Math.abs(x1-x0), nh=Math.abs(y1-y0);
-      nw=Math.max(nw,1); nh=Math.max(nh,1);
-      o.x=nx; o.y=ny; o.w=nw; o.h=nh;
+      nx=Math.min(x0,x1); ny=Math.min(y0,y1); nw=Math.max(Math.abs(x1-x0),1); nh=Math.max(Math.abs(y1-y0),1);
     } else {
       // rotated -> center-fixed resize
       const pl=rotatePt(docP.x,docP.y,c.x,c.y,-rot);
       let halfW=Math.max(Math.abs(pl.x-c.x),0.5), halfH=Math.max(Math.abs(pl.y-c.y),0.5);
       if(h==='n'||h==='s') halfW=b.w/2; if(h==='e'||h==='w') halfH=b.h/2;
-      o.w=halfW*2; o.h=halfH*2; o.x=c.x-halfW; o.y=c.y-halfH;
+      nw=halfW*2; nh=halfH*2; nx=c.x-halfW; ny=c.y-halfH;
+    }
+    if(o.type==='path'){
+      // ścieżki/bazy skalujemy przez sx/sy względem lokalnego środka geometrii
+      const lcx=(o.bx||0)+(o.bw||0)/2, lcy=(o.by||0)+(o.bh||0)/2;
+      o.sx=nw/(o.bw||1); o.sy=nh/(o.bh||1);
+      o.x=nx+nw/2-lcx; o.y=ny+nh/2-lcy;
+    } else {
+      o.x=nx; o.y=ny; o.w=nw; o.h=nh;
     }
   }
 
@@ -1102,6 +1167,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     if(o.type==='text'||o.type==='path'){
       h+=numField('Przesunięcie X (mm)','x',o,{step:1});
       h+=numField('Przesunięcie Y (mm)','y',o,{step:1});
+      if(o.type==='path'){
+        const bb=objBBox(o);
+        h+=`<div class="field"><label>Szerokość (mm)</label><input type="number" id="pathW" value="${fmt(bb.w)}" min="1" step="1"></div>`;
+        h+=`<div class="field"><label>Wysokość (mm)</label><input type="number" id="pathH" value="${fmt(bb.h)}" min="1" step="1"></div>`;
+        h+=`<div class="field"><button type="button" id="pathReset" class="tbtn" style="width:100%;justify-content:center">↺ Przywróć proporcje 1:1</button></div>`;
+      }
     } else {
       h+=numField('Pozycja X (mm)','x',o,{step:1});
       h+=numField('Pozycja Y (mm)','y',o,{step:1});
@@ -1159,14 +1230,19 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     }
     // depth / 3D layer selector
     const dep = o.depth||1; const dc2=dep<=6?`d${dep}`:'dN';
-    h+=`<div class="field"><label>Warstwa 3D (głębokość)</label>
-      <div class="depth-ctrl">
+    const maxDep=Math.max(1,...state.objects.map(x=>x.depth||1));
+    let laBtns='';
+    for(let dd=1; dd<=maxDep; dd++){ laBtns+=`<button type="button" class="la-btn${dd===dep?' on':''}" data-setdepth="${dd}" style="background:${depthColor(dd)}" title="Przenieś na warstwę ${dd}">W${dd}</button>`; }
+    laBtns+=`<button type="button" class="la-btn la-new" data-setdepth="${maxDep+1}" title="Nowa warstwa ${maxDep+1}">+ W${maxDep+1}</button>`;
+    h+=`<div class="field"><label>Warstwa 3D — kliknij, by przenieść element</label>
+      <div class="layer-assign">${laBtns}</div>
+      <div class="depth-ctrl" style="margin-top:7px">
         <button type="button" class="dbtn" id="depthDown">−</button>
         <span class="dval" id="depthVal">${dep}</span>
         <button type="button" class="dbtn" id="depthUp">+</button>
         <span class="d-badge ${dc2}" style="margin-left:4px">W${dep}</span>
+        <span style="font-size:.7rem;color:var(--muted);margin-left:6px">${fmt(layerMM(dep))} mm grubości</span>
       </div>
-      <p style="font-size:.72rem;color:var(--muted);margin-top:4px;line-height:1.5">Przypisz elementy do różnych warstw, a potem użyj 🧊 Eksport 3D — program podzieli projekt na osobne pliki do sklejenia.</p>
     </div>`;
     propsEl.innerHTML=h;
     bindProps();
@@ -1235,6 +1311,18 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     if(offBtn) offBtn.addEventListener('click',()=>{ const d=Number(propsEl.querySelector('#offsetVal').value)||0; if(d!==0) addOffsetFromSel(d); });
     const smBtn=propsEl.querySelector('#smoothBtn');
     if(smBtn) smBtn.addEventListener('click',()=>{ const o=getSel(); if(o) smoothPathObj(o); });
+    const pathW=propsEl.querySelector('#pathW'), pathH=propsEl.querySelector('#pathH');
+    function applyPathSize(){ const ob=getSel(); if(!ob||ob.type!=='path') return;
+      const lcx=(ob.bx||0)+(ob.bw||0)/2, lcy=(ob.by||0)+(ob.bh||0)/2;
+      const cxd=ob.x+lcx, cyd=ob.y+lcy;                 // utrzymaj środek w miejscu
+      const nw=Math.max(1,Number(pathW.value)||1), nh=Math.max(1,Number(pathH.value)||1);
+      ob.sx=nw/(ob.bw||1); ob.sy=nh/(ob.bh||1);
+      ob.x=cxd-lcx; ob.y=cyd-lcy;
+      renderObjects(); renderOverlay(); }
+    if(pathW) pathW.addEventListener('change',()=>{ applyPathSize(); pushHistory(); scheduleLive3D(); });
+    if(pathH) pathH.addEventListener('change',()=>{ applyPathSize(); pushHistory(); scheduleLive3D(); });
+    const pathReset=propsEl.querySelector('#pathReset');
+    if(pathReset) pathReset.addEventListener('click',()=>{ const ob=getSel(); if(ob&&ob.type==='path'){ ob.sx=1; ob.sy=1; renderAll(); renderProps(); pushHistory(); } });
     const frameBtn=propsEl.querySelector('#frameAddBtn');
     if(frameBtn) frameBtn.addEventListener('click',()=>addTextFrame());
     const ddBtn=propsEl.querySelector('#depthDown'), duBtn=propsEl.querySelector('#depthUp');
@@ -1242,6 +1330,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
       ddBtn.addEventListener('click',()=>{ obj.depth=Math.max(1,(obj.depth||1)-1); renderAll(); renderProps(); pushHistory(); });
       duBtn.addEventListener('click',()=>{ obj.depth=(obj.depth||1)+1; renderAll(); renderProps(); pushHistory(); });
     }
+    propsEl.querySelectorAll('[data-setdepth]').forEach(b=>b.addEventListener('click',()=>{
+      const dd=Number(b.dataset.setdepth); getSelected().forEach(ob=>ob.depth=dd);
+      renderAll(); renderProps(); pushHistory();
+    }));
   }
   function normalizeRepeat(type,old){
     if(type==='none') return {type:'none'};
@@ -1546,37 +1638,47 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
   document.getElementById('modal3dClose').addEventListener('click', ()=>document.getElementById('modal3d').classList.remove('open'));
   document.getElementById('modal3d').addEventListener('click', e=>{ if(e.target===document.getElementById('modal3d')) document.getElementById('modal3d').classList.remove('open'); });
 
-  /* ---------------- Depth legend + depth-view toggle ---------------- */
+  /* ---------------- Manager warstw 3D ---------------- */
   function renderDepthLegend(){
     const dlEl=document.getElementById('depthLegend'); if(!dlEl) return;
     const depths=[...new Set(state.objects.map(o=>o.depth||1))].sort((a,b)=>a-b);
-    if(!depths.length){ dlEl.innerHTML='<span style="font-size:.71rem;color:var(--muted)">Brak elementów.</span>'; return; }
+    if(!depths.length){ dlEl.innerHTML='<div class="dl-empty">Brak elementów. Dodaj kształt lub bazę — przypiszesz mu warstwę poniżej.</div>'; return; }
+    const selDepths=new Set(getSelected().map(o=>o.depth||1));
     dlEl.innerHTML=depths.map(dep=>{
       const col=depthColor(dep);
       const hidden=state.hiddenDepths.includes(dep);
       const cnt=state.objects.filter(o=>(o.depth||1)===dep).length;
-      return `<button class="dl-chip${hidden?' depth-hidden':''}" data-dep="${dep}" style="background:${col}" title="W${dep}: ${cnt} element${cnt===1?'':'ów'} · kliknij = zaznacz · Shift+klik = ukryj/pokaż">W${dep}&nbsp;<span style="opacity:.75;font-weight:400">${cnt}</span></button>`;
+      const sel=selDepths.has(dep)?' on':'';
+      return `<div class="lyr-row${hidden?' lyr-hidden':''}${sel}" data-dep="${dep}">
+        <button class="lyr-pick" data-pick="${dep}" style="background:${col}" title="Zaznacz wszystkie elementy warstwy ${dep}">W${dep}</button>
+        <span class="lyr-cnt">${cnt} el.</span>
+        <input class="lyr-mm" type="number" data-mm="${dep}" value="${fmt(layerMM(dep))}" min="0.5" step="0.5" title="Grubość materiału tej warstwy (mm)"><span class="lyr-unit">mm</span>
+        <button class="lyr-eye" data-eye="${dep}" title="Pokaż / ukryj warstwę">${hidden?'🚫':'👁'}</button>
+      </div>`;
     }).join('');
-    dlEl.querySelectorAll('.dl-chip').forEach(chip=>{
-      const dep=Number(chip.getAttribute('data-dep'));
-      chip.addEventListener('click',e=>{
-        if(e.shiftKey){
-          const i=state.hiddenDepths.indexOf(dep);
-          if(i>=0) state.hiddenDepths.splice(i,1); else state.hiddenDepths.push(dep);
-          renderObjects(); renderOverlay(); renderDepthLegend();
-        } else {
-          state.selectedIds=expandGroupSelection(state.objects.filter(o=>(o.depth||1)===dep).map(o=>o.id));
-          renderOverlay(); renderLayers(); renderProps();
-        }
-      });
+    dlEl.querySelectorAll('[data-pick]').forEach(b=>b.addEventListener('click',()=>{
+      const dep=Number(b.dataset.pick);
+      state.selectedIds=expandGroupSelection(state.objects.filter(o=>(o.depth||1)===dep).map(o=>o.id));
+      renderOverlay(); renderLayers(); renderProps(); renderDepthLegend();
+    }));
+    dlEl.querySelectorAll('[data-eye]').forEach(b=>b.addEventListener('click',()=>{
+      const dep=Number(b.dataset.eye); const i=state.hiddenDepths.indexOf(dep);
+      if(i>=0) state.hiddenDepths.splice(i,1); else state.hiddenDepths.push(dep);
+      renderObjects(); renderOverlay(); renderDepthLegend(); scheduleLive3D();
+    }));
+    dlEl.querySelectorAll('[data-mm]').forEach(inp=>{
+      const dep=Number(inp.dataset.mm);
+      inp.addEventListener('change',()=>{ setLayerMM(dep,inp.value); inp.value=fmt(layerMM(dep)); scheduleLive3D(); pushHistory(); });
+      inp.addEventListener('input',()=>{ setLayerMM(dep,inp.value); scheduleLive3D(); });
     });
   }
 
   const depthViewBtn=document.getElementById('depthViewBtn');
+  depthViewBtn.classList.toggle('active',state.depthView);
   depthViewBtn.addEventListener('click',()=>{
     state.depthView=!state.depthView;
     depthViewBtn.classList.toggle('active',state.depthView);
-    depthViewBtn.title=state.depthView?'Wyłącz tryb warstw 3D':'Tryb warstw 3D — pokoloruj elementy według warstwy głębokości';
+    depthViewBtn.title=state.depthView?'Pokaż kolory cięcia/grawer':'Pokoloruj elementy według warstwy 3D';
     renderObjects(); renderOverlay();
   });
 
@@ -1591,7 +1693,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     r=Math.round(r*f);g=Math.round(g*f);b=Math.round(b*f); return `rgb(${r},${g},${b})`; }
 
   // Buduje stos warstw w podanym <div> sceny. sw = szerokość w px.
-  function buildLayerScene(sceneEl, sw, thick){
+  // Grubość każdej warstwy bierze się z state.layerMM (w mm) i jest skalowana do px,
+  // dzięki czemu grubsza warstwa jest realnie wyższa w wizualizacji.
+  function buildLayerScene(sceneEl, sw, pxPerMM){
     const W=state.docW, H=state.docH;
     const vis=state.objects.filter(o=>o.visible && !state.hiddenDepths.includes(o.depth||1));
     const depths=[...new Set(vis.map(o=>o.depth||1))].sort((a,b)=>a-b);
@@ -1599,10 +1703,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     sceneEl.dataset.empty='';
     const sh=Math.round(H/W*sw);
     sceneEl.style.width=sw+'px'; sceneEl.style.height=sh+'px';
-    const slices=Math.max(2,Math.min(9,Math.round(thick/3.2)));
-    let html='';
-    depths.forEach((dep,i)=>{
+    const svgOpen=`<svg viewBox="0 0 ${W} ${H}" width="${sw}" height="${sh}" xmlns="${SVG_NS}" style="position:absolute;top:0;left:0">`;
+    let html='', zBase=0;
+    depths.forEach(dep=>{
       const col=depthColor(dep);
+      const mm=layerMM(dep);
+      const thick=Math.max(3, mm*pxPerMM);     // grubość płyty w px (proporcjonalna do mm)
+      const slices=Math.max(2,Math.min(10,Math.round(thick/3.2)));
       // KUMULATYWNA sylwetka: wszystkie elementy na warstwach >= dep
       const objs=vis.filter(o=>(o.depth||1)>=dep);
       _silFill=col;
@@ -1610,55 +1717,65 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
       _silFill=darkenHex(col,0.55);
       const wallBody=objs.map(o=>objMarkup(o,false)).join('');
       _silFill=null;
-      const zTop=i*thick;                       // górna ścianka tej płyty
-      const svgOpen=`<svg viewBox="0 0 ${W} ${H}" width="${sw}" height="${sh}" xmlns="${SVG_NS}" style="position:absolute;top:0;left:0">`;
-      // ścianki: kilka kopii sylwetki schodzących w dół wypełniających grubość
+      const zTop=zBase+thick;                   // górna ścianka tej płyty
       let walls='';
-      for(let j=slices;j>=1;j--){ const z=zTop-(j/slices)*thick;
+      for(let j=slices-1;j>=1;j--){ const z=zBase+(j/slices)*thick;
         walls+=`<div class="l3d-layer" style="width:${sw}px;height:${sh}px;transform:translateZ(${fmt(z)}px)">${svgOpen}${wallBody}</svg></div>`; }
       const top=`<div class="l3d-layer" style="width:${sw}px;height:${sh}px;transform:translateZ(${fmt(zTop)}px)">${svgOpen}${topBody}</svg></div>`;
       html+=walls+top;
+      zBase=zTop;                               // następna warstwa zaczyna się na wierzchu tej
     });
     sceneEl.innerHTML=html;
     return depths.length;
   }
 
-  /* ----- Live dock preview (zawsze widoczny przy płótnie) ----- */
-  let liveRot={x:58,z:-26}, liveDrag=null, live3dRAF=null;
-  const live3d=document.getElementById('live3d');
+  // łączna grubość stosu w mm (do auto-skalowania wizualizacji)
+  function totalStackMM(){
+    const vis=state.objects.filter(o=>o.visible && !state.hiddenDepths.includes(o.depth||1));
+    const depths=[...new Set(vis.map(o=>o.depth||1))];
+    return depths.reduce((s,d)=>s+layerMM(d),0)||3;
+  }
+
+  /* ----- Bottom dock: live 3D + live SVG split ----- */
+  let liveRot={x:60,z:-28}, liveDrag=null, live3dRAF=null;
+  const bottombar=document.getElementById('bottombar');
   const live3dStage=document.getElementById('live3dStage');
   const live3dScene=document.getElementById('live3dScene');
+  const bbSvgEl=document.getElementById('bbSvg');
   function applyLiveRot(){ live3dScene.style.transform=`rotateX(${liveRot.x}deg) rotateZ(${liveRot.z}deg)`; }
   function updateLive3D(){
-    if(live3d.classList.contains('collapsed')) return;
-    const thick=Number(document.getElementById('live3dThick').value)||14;
-    const n=buildLayerScene(live3dScene, 150, thick);
-    if(!n){ live3dScene.innerHTML='<div style="color:#666;font-size:.7rem;transform:none">Brak elementów</div>'; }
+    if(bottombar.classList.contains('collapsed')) return;
+    const W=state.docW,H=state.docH;
+    const sh=live3dStage.clientHeight||200;
+    let sw=Math.round(W/H*(sh*0.62)); sw=Math.max(120,Math.min(sw, (live3dStage.clientWidth||300)*0.75));
+    const pxPerMM=Math.max(1.5, Math.min(7, (sh*0.45)/totalStackMM()));
+    const n=buildLayerScene(live3dScene, sw, pxPerMM);
+    if(!n){ live3dScene.style.width='auto'; live3dScene.style.height='auto'; live3dScene.innerHTML='<div style="color:#666;font-size:.74rem;transform:none">Dodaj elementy, aby zobaczyć wizualizację 3D</div>'; }
     applyLiveRot();
+    scheduleSvgSplit();
   }
   function scheduleLive3D(){ if(live3dRAF) return; live3dRAF=requestAnimationFrame(()=>{ live3dRAF=null; updateLive3D(); }); }
+
+  // union jest kosztowny -> przeliczamy rozdzielony SVG z opóźnieniem (gdy edycja ucichnie)
+  let svgSplitTimer=null;
+  function scheduleSvgSplit(){ clearTimeout(svgSplitTimer); svgSplitTimer=setTimeout(updateSvgSplit, 280); }
+  function updateSvgSplit(){
+    if(bottombar.classList.contains('collapsed')) return;
+    let r=null; try{ r=buildSeparatedSVG(); }catch(e){ console.warn('SVG split error',e); }
+    bbSvgEl.innerHTML = r ? r.svg : '<div class="bb-empty">Dodaj elementy — tu pojawi się plik z rozdzielonymi warstwami</div>';
+  }
 
   live3dStage.addEventListener('pointerdown',e=>{ liveDrag={sx:e.clientX,sy:e.clientY,rx:liveRot.x,rz:liveRot.z}; live3dStage.classList.add('l3d-dragging'); live3dStage.setPointerCapture(e.pointerId); });
   live3dStage.addEventListener('pointermove',e=>{ if(!liveDrag) return; const dx=e.clientX-liveDrag.sx, dy=e.clientY-liveDrag.sy;
     liveRot.x=Math.max(5,Math.min(88,liveDrag.rx-dy*0.4)); liveRot.z=liveDrag.rz+dx*0.4; applyLiveRot(); });
   live3dStage.addEventListener('pointerup',()=>{ liveDrag=null; live3dStage.classList.remove('l3d-dragging'); });
-  document.getElementById('live3dThick').addEventListener('input',updateLive3D);
-  document.getElementById('live3dToggle').addEventListener('click',()=>{
-    live3d.classList.toggle('collapsed');
-    document.getElementById('live3dToggle').textContent=live3d.classList.contains('collapsed')?'▸':'▾';
-    if(!live3d.classList.contains('collapsed')) updateLive3D();
+  document.getElementById('bbTab').addEventListener('click',()=>{
+    bottombar.classList.toggle('collapsed');
+    document.getElementById('bbTab').textContent=bottombar.classList.contains('collapsed')?'▴ podgląd':'▾ podgląd';
+    if(!bottombar.classList.contains('collapsed')){ syncViewAspect(); applyView(); updateLive3D(); }
   });
   document.getElementById('live3dExpand').addEventListener('click',showPreview3D);
-  // przeciąganie nagłówka = przenoszenie panelu
-  (function(){ const head=document.getElementById('live3dHead'); let mv=null;
-    head.addEventListener('pointerdown',e=>{ if(e.target.closest('button')) return; const r=live3d.getBoundingClientRect();
-      mv={sx:e.clientX,sy:e.clientY,l:r.left,t:r.top}; head.setPointerCapture(e.pointerId); e.preventDefault(); });
-    head.addEventListener('pointermove',e=>{ if(!mv) return; const st=document.querySelector('.stage').getBoundingClientRect();
-      let nl=mv.l+(e.clientX-mv.sx)-st.left, nt=mv.t+(e.clientY-mv.sy)-st.top;
-      nl=Math.max(0,Math.min(st.width-live3d.offsetWidth,nl)); nt=Math.max(0,Math.min(st.height-live3d.offsetHeight,nt));
-      live3d.style.left=nl+'px'; live3d.style.top=nt+'px'; live3d.style.right='auto'; live3d.style.bottom='auto'; });
-    head.addEventListener('pointerup',()=>{ mv=null; });
-  })();
+  document.getElementById('bbDownload').addEventListener('click',downloadSeparatedSVG);
 
   /* ----- Big modal preview ----- */
   let p3dRot={x:54,z:-24}, p3dDrag=null;
@@ -1666,10 +1783,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     const W=state.docW, H=state.docH;
     const vis=state.objects.filter(o=>o.visible && !state.hiddenDepths.includes(o.depth||1));
     if(!vis.length){ alert('Brak widocznych elementów do wizualizacji 3D.'); return; }
-    const thick=Number(document.getElementById('p3dThick').value)||24;
     const scene=document.getElementById('p3dScene');
     const sw=Math.min(360, Math.round(W/H*300));
-    buildLayerScene(scene, sw, thick);
+    const pxPerMM=Math.max(2, Math.min(10, 200/totalStackMM()));
+    buildLayerScene(scene, sw, pxPerMM);
     p3dRot={x:54,z:-24};
     scene.style.transform=`rotateX(${p3dRot.x}deg) rotateZ(${p3dRot.z}deg)`;
     document.getElementById('modal3dPrev').classList.add('open');
@@ -1683,13 +1800,77 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
   p3dWrap.addEventListener('pointerup',()=>{ p3dDrag=null; p3dWrap.classList.remove('p3d-dragging'); });
   p3dWrap.addEventListener('wheel',e=>{ e.preventDefault(); p3dRot.x=Math.max(5,Math.min(88,p3dRot.x+(e.deltaY>0?1.5:-1.5)));
     document.getElementById('p3dScene').style.transform=`rotateX(${p3dRot.x}deg) rotateZ(${p3dRot.z}deg)`; },{passive:false});
-  document.getElementById('p3dThick').addEventListener('input',()=>{
-    document.getElementById('p3dThickV').textContent=document.getElementById('p3dThick').value;
-    if(document.getElementById('modal3dPrev').classList.contains('open')) showPreview3D();
-  });
   document.getElementById('preview3dBtn').addEventListener('click',showPreview3D);
   document.getElementById('modal3dPrevClose').addEventListener('click',()=>document.getElementById('modal3dPrev').classList.remove('open'));
   document.getElementById('modal3dPrev').addEventListener('click',e=>{ if(e.target===document.getElementById('modal3dPrev')) document.getElementById('modal3dPrev').classList.remove('open'); });
+
+  /* ---------------- Łączenie warstw (union) + rozdzielony plik SVG ----------------
+     Dla każdej warstwy bierzemy wszystkie kształty CIĘCIA na warstwach >= dep
+     (model podpierający) i łączymy je w jeden obrys (union) — wspólne pola znikają,
+     zostaje jedna scalona bryła warstwy. Dekoracje (grawer/nacięcie) z danej warstwy
+     rysujemy na wierzchu. Wszystkie warstwy w JEDNYM pliku, rozsunięte obok siebie. */
+  function unionAll(polys){
+    const list=polys.filter(p=>p&&p.length>=3);
+    let changed=true, guard=0;
+    while(changed && guard++<200){ changed=false;
+      for(let i=0;i<list.length && !changed;i++){
+        for(let j=i+1;j<list.length && !changed;j++){
+          let overlap=false;
+          try{ overlap=clipGH(list[i],list[j],'intersection').length>0; }catch(e){}
+          if(overlap){
+            let u=null; try{ u=clipGH(list[i],list[j],'union'); }catch(e){}
+            if(u&&u.length){ const ring=u.reduce((a,b)=>Math.abs(polyArea(b))>Math.abs(polyArea(a))?b:a,u[0]);
+              list.splice(j,1); list.splice(i,1,ring); changed=true; }
+          }
+        }
+      }
+    }
+    return list;
+  }
+  // Łączy obrys jednej warstwy: powłoki (duże kontury) sumuje, otwory (kontury wewnątrz
+  // powłok) zostawia jako osobne cięcia. Zwraca tablicę pierścieni do narysowania.
+  function mergeLayerRings(objs){
+    let rings=[];
+    objs.forEach(o=>{ objSubPolys(o).forEach(r=>{ if(r.length>=3) rings.push({pts:r, area:Math.abs(polyArea(r)), c:polyCentroid(r)}); }); });
+    if(!rings.length) return [];
+    rings.sort((a,b)=>b.area-a.area);
+    // klasyfikacja: pierścień jest "otworem", jeśli jego środek leży w innym (większym) pierścieniu
+    const shells=[], holes=[];
+    rings.forEach(r=>{
+      const inside=rings.some(o=>o!==r && o.area>r.area && pointInPoly(r.c, o.pts));
+      (inside?holes:shells).push(r);
+    });
+    const merged=unionAll(shells.map(s=>s.pts));
+    return merged.concat(holes.map(h=>h.pts));
+  }
+  function buildSeparatedSVG(){
+    const W=state.docW,H=state.docH;
+    const vis=state.objects.filter(o=>o.visible && !state.hiddenDepths.includes(o.depth||1));
+    const depths=[...new Set(vis.map(o=>o.depth||1))].sort((a,b)=>a-b);
+    if(!depths.length) return null;
+    const gap=14, labelH=11;
+    const totalW=depths.length*(W+gap)-gap;
+    let groups='';
+    depths.forEach((dep,i)=>{
+      const ox=i*(W+gap), col=depthColor(dep);
+      const cutObjs=vis.filter(o=>(o.depth||1)>=dep && o.mode!=='engrave');
+      const rings=mergeLayerRings(cutObjs);
+      const cutPaths=rings.map(r=>`<path d="${polyToPathD(r)}" fill="none" stroke="${COLORS.cut}" stroke-width="0.3"/>`).join('');
+      const deco=vis.filter(o=>(o.depth||1)===dep && o.mode==='engrave').map(o=>objMarkup(o,true)).join('');
+      groups+=`<g class="warstwa-${dep}" data-warstwa="${dep}" transform="translate(${fmt(ox)} ${labelH})">`+
+        `<text x="${fmt(W/2)}" y="-3" font-size="6" text-anchor="middle" fill="${col}" font-family="sans-serif">Warstwa ${dep} · ${fmt(layerMM(dep))} mm</text>`+
+        cutPaths+deco+`</g>`;
+    });
+    const svg=`<svg xmlns="${SVG_NS}" viewBox="0 0 ${fmt(totalW)} ${fmt(H+labelH)}" width="${fmt(totalW)}mm" height="${fmt(H+labelH)}mm">${groups}</svg>`;
+    return {svg, w:totalW, h:H+labelH};
+  }
+  function downloadSeparatedSVG(){
+    const r=buildSeparatedSVG(); if(!r){ alert('Brak elementów do eksportu.'); return; }
+    const full=`<?xml version="1.0" encoding="UTF-8"?>\n${r.svg}`;
+    const blob=new Blob([full],{type:'image/svg+xml'}); const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download=`projekt-warstwy-${Date.now()}.svg`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  }
 
   /* ---------------- Export ---------------- */
   function exportSVG(){
