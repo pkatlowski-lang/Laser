@@ -233,6 +233,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
       <button class="tbtn" id="snapBtn" title="Przyciągaj do siatki">⊞ Siatka</button>
     </div>
     <div class="tgroup">
+      <button class="tbtn" id="loadFontsBtn" title="Wczytaj czcionki zainstalowane na komputerze (Chrome/Edge)">🔤 Czcionki z PC</button>
       <button class="tbtn" id="depthViewBtn" title="Tryb warstw 3D — pokoloruj elementy według warstwy głębokości (kliknij ponownie aby wyłączyć)">🎨 Warstwy</button>
       <button class="tbtn" id="preview3dBtn" title="Podgląd 3D — interaktywna wizualizacja projektu jako stos warstw materiału">🎯 Podgląd 3D</button>
       <button class="tbtn" id="exportBtn" style="background:linear-gradient(135deg,var(--accent),var(--accent-dark));border-color:var(--accent);color:#1a1308">⬇ Pobierz SVG</button>
@@ -328,6 +329,18 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     ['"Montserrat", sans-serif','Montserrat'],
     ['"Inter", sans-serif','Inter']
   ];
+  let localFonts=[];                       // czcionki zainstalowane na komputerze
+  function availableFonts(){ return FONTS.concat(localFonts); }
+  async function loadLocalFonts(){
+    if(!window.queryLocalFonts){ alert('Ta przeglądarka nie udostępnia czcionek z komputera.\nUżyj Chrome lub Edge (i otwórz edytor przez https albo lokalnie z uprawnieniami).'); return; }
+    try{
+      const fonts=await window.queryLocalFonts();
+      const fams=[...new Set(fonts.map(f=>f.family))].sort((a,b)=>a.localeCompare(b));
+      localFonts=fams.map(f=>[`"${f}"`, f]);
+      renderProps();
+      alert('Wczytano '+fams.length+' czcionek z komputera. Znajdziesz je na liście „Czcionka” (oznaczone • PC).');
+    }catch(e){ alert('Nie udało się wczytać czcionek z komputera: '+e.message); }
+  }
 
   function fmt(n){ return Number(Number(n).toFixed(3)); }
   function uid(){ return 'o'+Math.random().toString(36).slice(2,9); }
@@ -1187,7 +1200,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     if(o.type==='line') h+=`<div class="field"><label>Kierunek</label><div class="seg" data-seg="flip"><button class="${!o.flip?'on':''}" data-flip="0">↘ ukośna</button><button class="${o.flip?'on':''}" data-flip="1">↗ ukośna</button></div></div>`;
     if(o.type==='text'){
       h+=`<div class="field"><label>Treść napisu</label><input type="text" data-prop="text" value="${escapeXml(o.text||'')}" maxlength="80"></div>`;
-      h+=`<div class="field"><label>Czcionka</label><select data-prop="font">${FONTS.map(([v,l])=>`<option value='${v}' ${v===o.font?'selected':''}>${l}</option>`).join('')}</select></div>`;
+      h+=`<div class="field"><label>Czcionka</label><select data-prop="font">${availableFonts().map(([v,l])=>`<option value='${escapeXml(v)}' ${v===o.font?'selected':''}>${escapeXml(l)}${localFonts.some(f=>f[0]===v)?' • PC':''}</option>`).join('')}</select></div>`;
       h+=rangeField('Wielkość (mm)','fontSize',o.fontSize||24,4,160,1,o);
     }
     // repeat modifier
@@ -1801,6 +1814,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
   p3dWrap.addEventListener('wheel',e=>{ e.preventDefault(); p3dRot.x=Math.max(5,Math.min(88,p3dRot.x+(e.deltaY>0?1.5:-1.5)));
     document.getElementById('p3dScene').style.transform=`rotateX(${p3dRot.x}deg) rotateZ(${p3dRot.z}deg)`; },{passive:false});
   document.getElementById('preview3dBtn').addEventListener('click',showPreview3D);
+  document.getElementById('loadFontsBtn').addEventListener('click',loadLocalFonts);
   document.getElementById('modal3dPrevClose').addEventListener('click',()=>document.getElementById('modal3dPrev').classList.remove('open'));
   document.getElementById('modal3dPrev').addEventListener('click',e=>{ if(e.target===document.getElementById('modal3dPrev')) document.getElementById('modal3dPrev').classList.remove('open'); });
 
