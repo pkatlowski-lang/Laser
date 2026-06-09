@@ -144,6 +144,19 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 .layer3d-card svg{width:120px;height:76px;overflow:visible;background:#111;border-radius:5px;border:1px solid var(--border)}
 .modal-note{margin-top:16px;font-size:.76rem;color:var(--muted);line-height:1.7;border-top:1px solid var(--border);padding-top:12px}
 
+/* ---- 3D Preview modal ---- */
+.preview3d-wrap{perspective:1200px;background:radial-gradient(ellipse 70% 55% at 50% 58%,#12122a 0%,#040408 100%);border-radius:12px;height:430px;display:flex;align-items:center;justify-content:center;cursor:grab;overflow:hidden;user-select:none;margin:12px 0}
+.preview3d-wrap.p3d-dragging{cursor:grabbing}
+.preview3d-scene{transform-style:preserve-3d;position:relative}
+.p3d-layer{position:absolute;top:0;left:0;transform-style:preserve-3d}
+.p3d-layer svg{display:block}
+.p3d-edge-b,.p3d-edge-r{position:absolute;transform-style:preserve-3d}
+.p3d-edge-b{bottom:0;left:0;width:100%;transform-origin:bottom center}
+.p3d-edge-r{top:0;right:0;height:100%;transform-origin:right center}
+.p3d-controls{display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:.78rem;color:var(--muted);margin-bottom:6px}
+.p3d-controls input[type=range]{width:120px;accent-color:var(--accent)}
+.p3d-controls b{color:var(--text);min-width:22px;display:inline-block}
+
 .legend{display:flex;gap:14px;flex-wrap:wrap;padding:10px 16px;border-top:1px solid var(--border);font-size:.72rem;color:var(--muted)}
 .legend span{display:inline-flex;align-items:center;gap:6px}
 .legend i{width:13px;height:13px;border-radius:3px;display:inline-block}
@@ -191,6 +204,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     </div>
     <div class="tgroup">
       <button class="tbtn" id="depthViewBtn" title="Tryb warstw 3D — pokoloruj elementy według warstwy głębokości (kliknij ponownie aby wyłączyć)">🎨 Warstwy</button>
+      <button class="tbtn" id="preview3dBtn" title="Podgląd 3D — interaktywna wizualizacja projektu jako stos warstw materiału">🎯 Podgląd 3D</button>
       <button class="tbtn" id="exportBtn" style="background:linear-gradient(135deg,var(--accent),var(--accent-dark));border-color:var(--accent);color:#1a1308">⬇ Pobierz SVG</button>
       <button class="tbtn" id="export3dBtn" title="Eksport 3D — pobierz osobne SVG dla każdej warstwy głębokości i sklejaj je, by uzyskać efekt 3D">🧊 Eksport 3D</button>
     </div>
@@ -230,6 +244,20 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
       <h2>Właściwości</h2>
       <div id="props"></div>
     </aside>
+  </div>
+</div>
+
+<div class="modal-ov" id="modal3dPrev">
+  <div class="modal-box" style="max-width:860px">
+    <button class="modal-close" id="modal3dPrevClose" title="Zamknij">✕</button>
+    <h3>🎯 Wizualizacja 3D projektu</h3>
+    <div class="p3d-controls">
+      <label>Grubość warstwy:&nbsp;<input type="range" id="p3dThick" min="4" max="70" value="24">&nbsp;<b id="p3dThickV">24</b>&nbsp;px</label>
+    </div>
+    <div class="preview3d-wrap" id="p3dWrap">
+      <div class="preview3d-scene" id="p3dScene"></div>
+    </div>
+    <p style="font-size:.72rem;color:var(--muted);text-align:center;margin-top:8px">Przeciągnij aby obrócić · kółko myszy = zmień perspektywę · każdy kolor = osobna warstwa materiału</p>
   </div>
 </div>
 
@@ -1521,6 +1549,74 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     depthViewBtn.title=state.depthView?'Wyłącz tryb warstw 3D':'Tryb warstw 3D — pokoloruj elementy według warstwy głębokości';
     renderObjects(); renderOverlay();
   });
+
+  /* ---------------- 3D Preview (CSS preserve-3d stacked layers) ---------------- */
+  let p3dRot={x:52,z:-22}, p3dDrag=null;
+
+  function hexToRgba(hex,a){ const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16); return `rgba(${r},${g},${b},${a})`; }
+
+  function showPreview3D(){
+    const W=state.docW, H=state.docH;
+    const vis=state.objects.filter(o=>o.visible && !state.hiddenDepths.includes(o.depth||1));
+    if(!vis.length){ alert('Brak widocznych elementów do wizualizacji 3D.'); return; }
+    const depths=[...new Set(vis.map(o=>o.depth||1))].sort((a,b)=>a-b);
+    const thick=Number(document.getElementById('p3dThick').value)||24;
+
+    // scale to fit ~300px wide
+    const sw=300, sh=Math.round(H/W*sw);
+    const scene=document.getElementById('p3dScene');
+    scene.style.width=sw+'px'; scene.style.height=sh+'px';
+
+    const savedDV=state.depthView; state.depthView=true;
+    scene.innerHTML=depths.map((dep,i)=>{
+      const objs=vis.filter(o=>(o.depth||1)===dep);
+      const col=depthColor(dep);
+      const bgCol=hexToRgba(col,0.16);
+      const sideColB=hexToRgba(col,0.55);
+      const sideColR=hexToRgba(col,0.40);
+      const border=`1px solid ${hexToRgba(col,0.4)}`;
+      const bgRect=`<rect x="0" y="0" width="${W}" height="${H}" fill="${col}" fill-opacity=".15"/>`;
+      const body=objs.map(o=>objMarkup(o,false)).join('');
+      const z=i*thick;
+      return `<div class="p3d-layer" style="width:${sw}px;height:${sh}px;transform:translateZ(${z}px)">
+        <svg viewBox="0 0 ${W} ${H}" width="${sw}" height="${sh}" xmlns="${SVG_NS}" style="border:${border};background:${bgCol}">${bgRect}${body}</svg>
+        <div class="p3d-edge-b" style="width:${sw}px;height:${thick}px;background:${sideColB};transform:rotateX(90deg) translateZ(${-thick}px);border:${border}"></div>
+        <div class="p3d-edge-r" style="width:${thick}px;height:${sh}px;background:${sideColR};transform:rotateY(-90deg) translateZ(${-thick}px);border:${border}"></div>
+      </div>`;
+    }).join('');
+    state.depthView=savedDV;
+
+    p3dRot={x:52,z:-22};
+    scene.style.transform=`rotateX(${p3dRot.x}deg) rotateZ(${p3dRot.z}deg)`;
+    document.getElementById('modal3dPrev').classList.add('open');
+  }
+
+  const p3dWrap=document.getElementById('p3dWrap');
+  p3dWrap.addEventListener('pointerdown',e=>{
+    p3dDrag={sx:e.clientX,sy:e.clientY,rx:p3dRot.x,rz:p3dRot.z};
+    p3dWrap.classList.add('p3d-dragging');
+    p3dWrap.setPointerCapture(e.pointerId);
+  });
+  p3dWrap.addEventListener('pointermove',e=>{
+    if(!p3dDrag) return;
+    const dx=e.clientX-p3dDrag.sx, dy=e.clientY-p3dDrag.sy;
+    p3dRot.x=Math.max(5,Math.min(88,p3dDrag.rx-dy*0.42));
+    p3dRot.z=p3dDrag.rz+dx*0.42;
+    document.getElementById('p3dScene').style.transform=`rotateX(${p3dRot.x}deg) rotateZ(${p3dRot.z}deg)`;
+  });
+  p3dWrap.addEventListener('pointerup',()=>{ p3dDrag=null; p3dWrap.classList.remove('p3d-dragging'); });
+  p3dWrap.addEventListener('wheel',e=>{
+    e.preventDefault();
+    p3dRot.x=Math.max(5,Math.min(88,p3dRot.x+(e.deltaY>0?1.5:-1.5)));
+    document.getElementById('p3dScene').style.transform=`rotateX(${p3dRot.x}deg) rotateZ(${p3dRot.z}deg)`;
+  },{passive:false});
+  document.getElementById('p3dThick').addEventListener('input',()=>{
+    document.getElementById('p3dThickV').textContent=document.getElementById('p3dThick').value;
+    if(document.getElementById('modal3dPrev').classList.contains('open')) showPreview3D();
+  });
+  document.getElementById('preview3dBtn').addEventListener('click',showPreview3D);
+  document.getElementById('modal3dPrevClose').addEventListener('click',()=>document.getElementById('modal3dPrev').classList.remove('open'));
+  document.getElementById('modal3dPrev').addEventListener('click',e=>{ if(e.target===document.getElementById('modal3dPrev')) document.getElementById('modal3dPrev').classList.remove('open'); });
 
   /* ---------------- Export ---------------- */
   function exportSVG(){
