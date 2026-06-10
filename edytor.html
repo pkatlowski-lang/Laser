@@ -248,6 +248,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
       <button class="tbtn" id="snapBtn" title="Przyciągaj do siatki">⊞ Siatka</button>
     </div>
     <div class="tgroup">
+      <button class="tbtn" id="newProjectBtn" title="Nowy projekt — wyczyść płótno i zacznij od nowa">🆕 Nowy</button>
+      <button class="tbtn" id="saveProjectBtn" title="Zapisz cały projekt do pliku .json (do wczytania później)">💾 Zapisz projekt</button>
+      <button class="tbtn" id="loadProjectBtn" title="Wczytaj projekt z pliku .json">📂 Otwórz projekt</button>
+      <input type="file" id="loadProjectInput" accept=".json,application/json" style="display:none">
+    </div>
+    <div class="tgroup">
       <button class="tbtn" id="loadFontsBtn" title="Wczytaj czcionki zainstalowane na komputerze (Chrome/Edge)">🔤 Czcionki z PC</button>
       <button class="tbtn" id="depthViewBtn" title="Tryb warstw 3D — pokoloruj elementy według warstwy głębokości (kliknij ponownie aby wyłączyć)">🎨 Warstwy</button>
       <button class="tbtn" id="preview3dBtn" title="Podgląd 3D — interaktywna wizualizacja projektu jako stos warstw materiału">🎯 Podgląd 3D</button>
@@ -258,6 +264,24 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 
   <div class="main">
     <aside class="panel left">
+      <h2>Arkusz roboczy</h2>
+      <div class="field">
+        <label>Rozmiar arkusza (mm) — szer. × wys.</label>
+        <div class="row2">
+          <input type="number" id="docWInput" min="10" max="3000" step="1" title="Szerokość arkusza (mm)">
+          <input type="number" id="docHInput" min="10" max="3000" step="1" title="Wysokość arkusza (mm)">
+        </div>
+        <select id="docPreset" class="bind-sel">
+          <option value="">— gotowe rozmiary —</option>
+          <option value="300x200">300 × 200 mm</option>
+          <option value="400x300">400 × 300 mm</option>
+          <option value="600x400">600 × 400 mm</option>
+          <option value="900x600">900 × 600 mm</option>
+          <option value="1200x900">1200 × 900 mm</option>
+          <option value="297x210">A4 — 297 × 210 mm</option>
+          <option value="420x297">A3 — 420 × 297 mm</option>
+        </select>
+      </div>
       <h2>Parametry globalne</h2>
       <div class="params" id="params"></div>
       <button type="button" class="tbtn addparam" id="addParamBtn">+ Dodaj parametr</button>
@@ -1566,8 +1590,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
         <span class="swatch ${sw}"></span>
         ${dbadge}
         <span class="lname">${escapeXml(autoName(o))}</span>
+        <button class="lico" data-act="top" title="Na wierzch">⤒</button>
         <button class="lico" data-act="up" title="Wyżej">▲</button>
         <button class="lico" data-act="down" title="Niżej">▼</button>
+        <button class="lico" data-act="bottom" title="Na spód">⤓</button>
         <button class="lico" data-act="vis" title="Pokaż/ukryj">${o.visible?'👁':'🚫'}</button>
         <button class="lico" data-act="lock" title="Zablokuj">${o.locked?'🔒':'🔓'}</button>
         <button class="lico" data-act="del" title="Usuń">✕</button>
@@ -1585,6 +1611,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     const i=state.objects.findIndex(o=>o.id===id); if(i<0) return; const o=state.objects[i];
     if(act==='up'){ if(i<state.objects.length-1){ state.objects.splice(i,1); state.objects.splice(i+1,0,o); pushHistory(); } }
     else if(act==='down'){ if(i>0){ state.objects.splice(i,1); state.objects.splice(i-1,0,o); pushHistory(); } }
+    else if(act==='top'){ if(i<state.objects.length-1){ state.objects.splice(i,1); state.objects.push(o); pushHistory(); } }
+    else if(act==='bottom'){ if(i>0){ state.objects.splice(i,1); state.objects.unshift(o); pushHistory(); } }
     else if(act==='vis'){ o.visible=!o.visible; pushHistory(); }
     else if(act==='lock'){ o.locked=!o.locked; pushHistory(); }
     else if(act==='del'){ state.objects.splice(i,1); state.selectedIds=state.selectedIds.filter(x=>x!==id); pushHistory(); }
@@ -1592,14 +1620,25 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
   }
 
   /* ---------------- History ---------------- */
-  function snapshot(){ return JSON.stringify({objects:state.objects,selectedIds:state.selectedIds,params:state.params}); }
+  function snapshot(){ return JSON.stringify({objects:state.objects,selectedIds:state.selectedIds,params:state.params,docW:state.docW,docH:state.docH,layerMM:state.layerMM}); }
   function pushHistory(){
     state.history=state.history.slice(0,state.hIndex+1);
     state.history.push(snapshot()); state.hIndex=state.history.length-1;
     if(state.history.length>120){ state.history.shift(); state.hIndex--; }
     updateUndoButtons();
+    autoSaveProject();
   }
-  function restore(s){ const d=JSON.parse(s); state.objects=d.objects; state.selectedIds=d.selectedIds||(d.selectedId?[d.selectedId]:[]); if(d.params) state.params=d.params; renderAll(); renderProps(); renderParams(); }
+  function restore(s){
+    const d=JSON.parse(s);
+    state.objects=d.objects; state.selectedIds=d.selectedIds||(d.selectedId?[d.selectedId]:[]);
+    if(d.params) state.params=d.params;
+    if(d.layerMM) state.layerMM=d.layerMM;
+    let docChanged=false;
+    if(d.docW && d.docW!==state.docW){ state.docW=d.docW; docChanged=true; }
+    if(d.docH && d.docH!==state.docH){ state.docH=d.docH; docChanged=true; }
+    if(docChanged){ docWInput.value=state.docW; docHInput.value=state.docH; renderGrid(); }
+    renderAll(); renderProps(); renderParams();
+  }
   function undo(){ if(state.hIndex>0){ state.hIndex--; restore(state.history[state.hIndex]); updateUndoButtons(); } }
   function redo(){ if(state.hIndex<state.history.length-1){ state.hIndex++; restore(state.history[state.hIndex]); updateUndoButtons(); } }
   function updateUndoButtons(){ document.getElementById('undoBtn').disabled=state.hIndex<=0; document.getElementById('redoBtn').disabled=state.hIndex>=state.history.length-1; }
@@ -1628,6 +1667,90 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
   snapBtn.classList.toggle('active',state.snap);
   snapBtn.addEventListener('click',()=>{ state.snap=!state.snap; snapBtn.classList.toggle('active',state.snap); });
   document.getElementById('exportBtn').addEventListener('click',exportSVG);
+
+  /* ---------------- Rozmiar arkusza roboczego ---------------- */
+  const docWInput=document.getElementById('docWInput'), docHInput=document.getElementById('docHInput'), docPreset=document.getElementById('docPreset');
+  function applyDocSize(w,h){
+    const nw=clamp(Math.round(Number(w))||state.docW,10,3000), nh=clamp(Math.round(Number(h))||state.docH,10,3000);
+    docWInput.value=nw; docHInput.value=nh;
+    if(nw===state.docW && nh===state.docH) return;
+    state.docW=nw; state.docH=nh;
+    syncViewAspect(); zoomFit(); renderGrid(); renderAll(); pushHistory();
+  }
+  docWInput.addEventListener('change',()=>applyDocSize(docWInput.value,docHInput.value));
+  docHInput.addEventListener('change',()=>applyDocSize(docWInput.value,docHInput.value));
+  docPreset.addEventListener('change',()=>{
+    if(!docPreset.value) return;
+    const [w,h]=docPreset.value.split('x').map(Number);
+    applyDocSize(w,h); docPreset.value='';
+  });
+
+  /* ---------------- Projekt: zapis do pliku / odczyt / autozapis (localStorage) ---------------- */
+  const AUTOSAVE_KEY='laserEditorAutosaveV1';
+  function serializeProject(){
+    return {
+      version:1, docW:state.docW, docH:state.docH,
+      objects:state.objects, params:state.params, layerMM:state.layerMM,
+      hiddenDepths:state.hiddenDepths, depthView:state.depthView
+    };
+  }
+  function autoSaveProject(){
+    try{ localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(serializeProject())); }catch(e){}
+  }
+  function restoreAutosave(){
+    try{
+      const raw=localStorage.getItem(AUTOSAVE_KEY);
+      if(!raw) return;
+      const d=JSON.parse(raw);
+      if(!d || !Array.isArray(d.objects) || !d.objects.length) return;
+      state.docW=d.docW||state.docW; state.docH=d.docH||state.docH;
+      state.objects=d.objects; state.params=d.params||state.params;
+      state.layerMM=d.layerMM||{}; state.hiddenDepths=d.hiddenDepths||[];
+      state.depthView=d.depthView!==undefined?d.depthView:true;
+    }catch(e){}
+  }
+  function applyProjectData(d){
+    state.docW=d.docW||300; state.docH=d.docH||200;
+    state.objects=d.objects||[];
+    state.params=d.params||state.params;
+    state.layerMM=d.layerMM||{};
+    state.hiddenDepths=d.hiddenDepths||[];
+    state.depthView=d.depthView!==undefined?d.depthView:true;
+    state.selectedIds=[]; state.history=[]; state.hIndex=-1;
+    docWInput.value=state.docW; docHInput.value=state.docH;
+    depthViewBtn.classList.toggle('active',state.depthView);
+    syncViewAspect(); zoomFit(); renderGrid(); renderAll(); renderProps(); renderParams();
+    pushHistory();
+  }
+  function downloadJSON(obj,filename){
+    const blob=new Blob([JSON.stringify(obj,null,1)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download=filename; a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
+  document.getElementById('saveProjectBtn').addEventListener('click',()=>{
+    downloadJSON(serializeProject(), `projekt-laser-${Date.now()}.json`);
+  });
+  document.getElementById('loadProjectBtn').addEventListener('click',()=>{
+    document.getElementById('loadProjectInput').click();
+  });
+  document.getElementById('loadProjectInput').addEventListener('change',e=>{
+    const f=e.target.files[0]; if(!f) return;
+    const reader=new FileReader();
+    reader.onload=()=>{
+      try{
+        const d=JSON.parse(reader.result);
+        if(!Array.isArray(d.objects)) throw new Error('zły format pliku');
+        applyProjectData(d);
+      }catch(err){ alert('Nie udało się wczytać projektu: '+err.message); }
+    };
+    reader.readAsText(f);
+    e.target.value='';
+  });
+  document.getElementById('newProjectBtn').addEventListener('click',()=>{
+    if(state.objects.length && !confirm('Wyczyścić bieżący projekt i zacząć od nowa? Niezapisane zmiany zostaną utracone.')) return;
+    applyProjectData({docW:300,docH:200,objects:[],params:[{id:'p_grubosc',name:'grubość_materiału',value:3,min:1,max:12,step:0.5}],layerMM:{},hiddenDepths:[],depthView:true});
+  });
 
   function duplicateSel(){ const sel=getSelected(); if(!sel.length) return;
     const gidMap={};
@@ -2235,7 +2358,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
   });
 
   /* ---------------- Init ---------------- */
-  buildCanvasSkeleton(); syncViewAspect(); zoomFit(); renderGrid(); renderAll(); renderProps(); renderParams(); renderGallery();
+  buildCanvasSkeleton(); syncViewAspect();
+  restoreAutosave();
+  docWInput.value=state.docW; docHInput.value=state.docH;
+  depthViewBtn.classList.toggle('active',state.depthView);
+  zoomFit(); renderGrid(); renderAll(); renderProps(); renderParams(); renderGallery();
   updateCanvasCursor();
   updateLive3D();
   pushHistory();
