@@ -512,7 +512,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
   function innerGeometry(o, forExport){
     if(o.type==='path'){
       const lcx=(o.bx||0)+(o.bw||0)/2, lcy=(o.by||0)+(o.bh||0)/2;
-      const sx=o.sx||1, sy=o.sy||1;
+      const sx=(o.sx||1)*(o.flipX?-1:1), sy=(o.sy||1)*(o.flipY?-1:1);
       const scalePart=(sx!==1||sy!==1)?` translate(${fmt(lcx)} ${fmt(lcy)}) scale(${fmt(sx)} ${fmt(sy)}) translate(${fmt(-lcx)} ${fmt(-lcy)})`:'';
       const t=`translate(${fmt(o.x||0)} ${fmt(o.y||0)}) rotate(${fmt(o.rotation||0)} ${fmt(lcx)} ${fmt(lcy)})${scalePart}`;
       const fr=o.fillRule==='evenodd'?' fill-rule="evenodd"':'';
@@ -539,7 +539,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
       const clsAttr=cls?` class="${cls}"`:'';
       const styleAttr=styleCss?` style="${styleCss}"`:'';
       let txt=`<text x="${fmt(o.x)}" y="${fmt(yBase)}" text-anchor="middle" font-family='${o.font}' font-size="${fmt(fs)}"${clsAttr}${styleAttr}>${escapeXml(o.text||'')}</text>`;
-      const tsx=o.tsx||1, tsy=o.tsy||1;
+      const tsx=(o.tsx||1)*(o.flipX?-1:1), tsy=(o.tsy||1)*(o.flipY?-1:1);
       if(tsx!==1||tsy!==1) txt=`<g transform="translate(${fmt(o.x)} ${fmt(yBase)}) scale(${fmt(tsx)} ${fmt(tsy)}) translate(${fmt(-o.x)} ${fmt(-yBase)})">${txt}</g>`;
       geo=txt;
     } else {
@@ -609,16 +609,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
   function objBBox(o){
     if(o.type==='path'){
       const sx=o.sx||1, sy=o.sy||1, cx=(o.bx||0)+(o.bw||0)/2, cy=(o.by||0)+(o.bh||0)/2;
-      const w=(o.bw||1)*sx, h=(o.bh||1)*sy;
+      const w=(o.bw||1)*Math.abs(sx), h=(o.bh||1)*Math.abs(sy);
       return {x:(o.x||0)+cx-w/2, y:(o.y||0)+cy-h/2, w, h};
     }
     if(o.type==='text'){
-      const fs=o.fontSize||24, tsx=o.tsx||1, tsy=o.tsy||1, ax=o.x, ay=o.y+fs*0.34;
+      const fs=o.fontSize||24, tsx=(o.tsx||1)*(o.flipX?-1:1), tsy=(o.tsy||1)*(o.flipY?-1:1), ax=o.x, ay=o.y+fs*0.34;
       const el=gObjects.querySelector(`[data-id="${o.id}"] text`);
       if(el){ try{ const b=el.getBBox();
-        return {x:ax+(b.x-ax)*tsx, y:ay+(b.y-ay)*tsy, w:b.width*tsx, h:b.height*tsy}; }catch(e){} }
-      const w=((o.text||'').length*fs*0.55||fs)*tsx;
-      return {x:o.x-w/2,y:o.y-fs*0.5*tsy,w:w,h:fs*tsy};
+        const x1=ax+(b.x-ax)*tsx, x2=x1+b.width*tsx, y1=ay+(b.y-ay)*tsy, y2=y1+b.height*tsy;
+        return {x:Math.min(x1,x2), y:Math.min(y1,y2), w:Math.abs(b.width*tsx), h:Math.abs(b.height*tsy)}; }catch(e){} }
+      const w=((o.text||'').length*fs*0.55||fs)*Math.abs(tsx), h=fs*Math.abs(tsy);
+      return {x:o.x-w/2,y:o.y-h/2,w:w,h:h};
     }
     return {x:o.x,y:o.y,w:o.w,h:o.h};
   }
@@ -804,7 +805,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
       pts.push([p.x+Math.sin((i+1)*12.9898)*EPS, p.y+Math.cos((i+1)*78.233)*EPS]); }
     if(o.type==='path'){
       const lcx=(o.bx||0)+(o.bw||0)/2, lcy=(o.by||0)+(o.bh||0)/2, r=deg2rad(o.rotation||0);
-      const sx=o.sx||1, sy=o.sy||1;
+      const sx=(o.sx||1)*(o.flipX?-1:1), sy=(o.sy||1)*(o.flipY?-1:1);
       for(const pt of pts){ let px=lcx+(pt[0]-lcx)*sx, py=lcy+(pt[1]-lcy)*sy; const rp=rotatePt(px,py,lcx,lcy,r); pt[0]=rp.x+(o.x||0); pt[1]=rp.y+(o.y||0); }
     } else if(o.rotation){
       const c={x:o.x+o.w/2,y:o.y+o.h/2}, r=deg2rad(o.rotation);
@@ -815,7 +816,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
   // Przekształca punkty z przestrzeni lokalnej obiektu do dokumentu (skala/obrót/przesunięcie).
   function transformObjPts(o, pts){
     if(o.type==='path'){
-      const lcx=(o.bx||0)+(o.bw||0)/2, lcy=(o.by||0)+(o.bh||0)/2, r=deg2rad(o.rotation||0), sx=o.sx||1, sy=o.sy||1;
+      const lcx=(o.bx||0)+(o.bw||0)/2, lcy=(o.by||0)+(o.bh||0)/2, r=deg2rad(o.rotation||0), sx=(o.sx||1)*(o.flipX?-1:1), sy=(o.sy||1)*(o.flipY?-1:1);
       for(const pt of pts){ let px=lcx+(pt[0]-lcx)*sx, py=lcy+(pt[1]-lcy)*sy; const rp=rotatePt(px,py,lcx,lcy,r); pt[0]=rp.x+(o.x||0); pt[1]=rp.y+(o.y||0); }
     } else if(o.rotation){
       const c={x:o.x+o.w/2,y:o.y+o.h/2}, r=deg2rad(o.rotation);
@@ -1269,6 +1270,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
       h+=numField('Wysokość (mm)','h',o,{step:1,min:1});
     }
     h+=rangeField('Obrót (°)','rotation',o.rotation||0,0,360,1,o);
+    if(o.type==='path'||o.type==='text'){
+      h+=`<div class="field"><label>Odbicie lustrzane</label><div class="seg" data-seg="flipaxis">
+        <button class="${o.flipX?'on':''}" data-flipaxis="x">↔ Poziomo</button>
+        <button class="${o.flipY?'on':''}" data-flipaxis="y">↕ Pionowo</button>
+      </div></div>`;
+    }
     // type-specific
     if(o.type==='rect') h+=rangeField('Zaokrąglenie rogów (mm)','rx',o.rx||0,0,Math.min(o.w,o.h)/2,1,o);
     if(o.type==='polygon') h+=rangeField('Liczba boków','sides',o.sides||6,3,16,1,o);
@@ -1405,6 +1412,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     });
     propsEl.querySelectorAll('[data-seg="mode"] button').forEach(b=>b.addEventListener('click',()=>{ o.mode=b.getAttribute('data-mode'); renderProps(); renderObjects(); pushHistory(); }));
     propsEl.querySelectorAll('[data-seg="flip"] button').forEach(b=>b.addEventListener('click',()=>{ o.flip=b.getAttribute('data-flip')==='1'; renderProps(); renderObjects(); pushHistory(); }));
+    propsEl.querySelectorAll('[data-seg="flipaxis"] button').forEach(b=>b.addEventListener('click',()=>{
+      const ax=b.getAttribute('data-flipaxis');
+      if(ax==='x') o.flipX=!o.flipX; else o.flipY=!o.flipY;
+      renderProps(); renderAll(); pushHistory(); scheduleLive3D();
+    }));
     const offBtn=propsEl.querySelector('#offsetBtn');
     if(offBtn) offBtn.addEventListener('click',()=>{ const d=Number(propsEl.querySelector('#offsetVal').value)||0; if(d!==0) addOffsetFromSel(d); });
     const smBtn=propsEl.querySelector('#smoothBtn');
