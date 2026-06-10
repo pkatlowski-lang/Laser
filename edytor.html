@@ -190,6 +190,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 .layer3d-card svg{width:120px;height:76px;overflow:visible;background:#111;border-radius:5px;border:1px solid var(--border)}
 .modal-note{margin-top:16px;font-size:.76rem;color:var(--muted);line-height:1.7;border-top:1px solid var(--border);padding-top:12px}
 
+/* ---- Skróty klawiszowe (modal) ---- */
+.shortcuts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px 28px;margin-top:16px}
+.sc-group h4{margin:0 0 8px;font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--accent)}
+.sc-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 0;font-size:.84rem}
+.sc-row .sc-keys{display:flex;gap:4px;flex-shrink:0}
+kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;background:var(--surface2);border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;font:600 .76rem var(--font-b);color:var(--text)}
+
 /* ---- 3D Preview modal ---- */
 .preview3d-wrap{perspective:1200px;background:radial-gradient(ellipse 70% 55% at 50% 58%,#12122a 0%,#040408 100%);border-radius:12px;height:430px;display:flex;align-items:center;justify-content:center;cursor:grab;overflow:hidden;user-select:none;margin:12px 0}
 .preview3d-wrap.p3d-dragging{cursor:grabbing}
@@ -292,6 +299,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
       <button class="tbtn" id="preview3dBtn" title="Podgląd 3D — interaktywna wizualizacja projektu jako stos warstw materiału">🎯 Podgląd 3D</button>
       <button class="tbtn" id="exportBtn" style="background:linear-gradient(135deg,var(--accent),var(--accent-dark));border-color:var(--accent);color:#1a1308">⬇ Pobierz SVG</button>
       <button class="tbtn" id="export3dBtn" title="Eksport 3D — pobierz osobne SVG dla każdej warstwy głębokości i sklejaj je, by uzyskać efekt 3D">🧊 Eksport 3D</button>
+    </div>
+    <div class="tgroup">
+      <button class="tbtn" id="helpBtn" title="Skróty klawiszowe (?)">⌨ Skróty</button>
     </div>
   </div>
 
@@ -423,6 +433,53 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     <p style="font-size:.8rem;color:var(--muted);margin:0">Każda warstwa to osobny plik SVG. Wytnij je z osobnych arkuszy materiału i sklejaj od dołu (Warstwa 1) do góry — uzyskasz efekt głębi 3D.</p>
     <div class="layers3d-grid" id="layers3dGrid"></div>
     <div class="modal-note" id="modal3dNote"></div>
+  </div>
+</div>
+
+<div class="modal-ov" id="modalHelp">
+  <div class="modal-box" style="max-width:680px">
+    <button class="modal-close" id="modalHelpClose" title="Zamknij">✕</button>
+    <h3>⌨ Skróty klawiszowe</h3>
+    <div class="shortcuts-grid">
+      <div class="sc-group">
+        <h4>Edycja</h4>
+        <div class="sc-row"><span>Cofnij</span><span class="sc-keys"><kbd>Ctrl</kbd>+<kbd>Z</kbd></span></div>
+        <div class="sc-row"><span>Ponów</span><span class="sc-keys"><kbd>Ctrl</kbd>+<kbd>Y</kbd></span></div>
+        <div class="sc-row"><span>Kopiuj</span><span class="sc-keys"><kbd>Ctrl</kbd>+<kbd>C</kbd></span></div>
+        <div class="sc-row"><span>Wklej</span><span class="sc-keys"><kbd>Ctrl</kbd>+<kbd>V</kbd></span></div>
+        <div class="sc-row"><span>Duplikuj</span><span class="sc-keys"><kbd>Ctrl</kbd>+<kbd>D</kbd></span></div>
+        <div class="sc-row"><span>Usuń zaznaczone</span><span class="sc-keys"><kbd>Del</kbd></span></div>
+        <div class="sc-row"><span>Zaznacz wszystko</span><span class="sc-keys"><kbd>Ctrl</kbd>+<kbd>A</kbd></span></div>
+        <div class="sc-row"><span>Grupuj</span><span class="sc-keys"><kbd>Ctrl</kbd>+<kbd>G</kbd></span></div>
+        <div class="sc-row"><span>Rozgrupuj</span><span class="sc-keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd></span></div>
+      </div>
+      <div class="sc-group">
+        <h4>Narzędzia</h4>
+        <div class="sc-row"><span>Zaznaczanie</span><span class="sc-keys"><kbd>V</kbd></span></div>
+        <div class="sc-row"><span>Rączka (przesuwanie widoku)</span><span class="sc-keys"><kbd>H</kbd></span></div>
+        <div class="sc-row"><span>Prostokąt</span><span class="sc-keys"><kbd>R</kbd></span></div>
+        <div class="sc-row"><span>Elipsa</span><span class="sc-keys"><kbd>O</kbd></span></div>
+        <div class="sc-row"><span>Wielokąt</span><span class="sc-keys"><kbd>P</kbd></span></div>
+        <div class="sc-row"><span>Gwiazda</span><span class="sc-keys"><kbd>S</kbd></span></div>
+        <div class="sc-row"><span>Linia</span><span class="sc-keys"><kbd>L</kbd></span></div>
+        <div class="sc-row"><span>Pióro (ścieżka)</span><span class="sc-keys"><kbd>N</kbd></span></div>
+        <div class="sc-row"><span>Tekst</span><span class="sc-keys"><kbd>T</kbd></span></div>
+      </div>
+      <div class="sc-group">
+        <h4>Widok</h4>
+        <div class="sc-row"><span>Powiększ / pomniejsz</span><span class="sc-keys"><kbd>Scroll</kbd></span></div>
+        <div class="sc-row"><span>Przesuń widok (tymczasowo)</span><span class="sc-keys"><kbd>Spacja</kbd>+przeciągnij</span></div>
+        <div class="sc-row"><span>Pokaż tę pomoc</span><span class="sc-keys"><kbd>?</kbd></span></div>
+      </div>
+      <div class="sc-group">
+        <h4>Zaznaczenie i ruch</h4>
+        <div class="sc-row"><span>Przesuń o 1 mm</span><span class="sc-keys"><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd></span></div>
+        <div class="sc-row"><span>Przesuń o krok siatki</span><span class="sc-keys"><kbd>Shift</kbd>+strzałki</span></div>
+        <div class="sc-row"><span>Zakończ ścieżkę (pióro)</span><span class="sc-keys"><kbd>Enter</kbd></span></div>
+        <div class="sc-row"><span>Anuluj / zamknij okno</span><span class="sc-keys"><kbd>Esc</kbd></span></div>
+        <div class="sc-row"><span>Menu kontekstowe</span><span class="sc-keys"><kbd>PPM</kbd></span></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -2015,6 +2072,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
   window.addEventListener('keyup',e=>{ if(e.code==='Space'){ spaceDown=false; if(!drag) updateCanvasCursor(); } });
   window.addEventListener('keydown',e=>{
     const typing=/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName);
+    if(e.key==='Escape'){
+      const openModal=document.querySelector('.modal-ov.open');
+      if(openModal){ e.preventDefault(); openModal.classList.remove('open'); return; }
+    }
+    if(e.key==='?' && !typing){ e.preventDefault(); showHelp(); return; }
     if(state.penDraft && !typing){ if(e.key==='Enter'){ e.preventDefault(); penFinish(); return; } if(e.key==='Escape'){ e.preventDefault(); penCancel(); return; } }
     if(e.code==='Space' && !typing){ spaceDown=true; if(!drag) canvas.style.cursor='grab'; e.preventDefault(); return; }
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){ e.preventDefault(); e.shiftKey?redo():undo(); return; }
@@ -2187,6 +2249,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
   document.getElementById('export3dBtn').addEventListener('click', showExport3D);
   document.getElementById('modal3dClose').addEventListener('click', ()=>document.getElementById('modal3d').classList.remove('open'));
   document.getElementById('modal3d').addEventListener('click', e=>{ if(e.target===document.getElementById('modal3d')) document.getElementById('modal3d').classList.remove('open'); });
+
+  /* ---------------- Pomoc — skróty klawiszowe ---------------- */
+  const modalHelp=document.getElementById('modalHelp');
+  function showHelp(){ modalHelp.classList.add('open'); }
+  function hideHelp(){ modalHelp.classList.remove('open'); }
+  document.getElementById('helpBtn').addEventListener('click', showHelp);
+  document.getElementById('modalHelpClose').addEventListener('click', hideHelp);
+  modalHelp.addEventListener('click', e=>{ if(e.target===modalHelp) hideHelp(); });
 
   /* ---------------- Manager warstw 3D ---------------- */
   function renderDepthLegend(){
