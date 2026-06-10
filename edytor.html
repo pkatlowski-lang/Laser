@@ -94,6 +94,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 .guide-hit-h{cursor:ns-resize}
 .guide-hit-v{cursor:ew-resize}
 
+/* ---- Edycja punktów ścieżki ---- */
+.node-outline{fill:none;stroke:#39d6ff;stroke-width:1.2px;stroke-dasharray:4 3;vector-effect:non-scaling-stroke;pointer-events:none}
+.node-handle-vis{fill:#39d6ff;stroke:#0e0e16;stroke-width:1.2px;vector-effect:non-scaling-stroke;pointer-events:none}
+.node-handle{cursor:pointer}
+
 /* ---- Property fields ---- */
 .field{padding:0 16px 12px}
 .field label{display:block;font-size:.72rem;font-weight:600;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.03em}
@@ -523,7 +528,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     tool:'select',
     snap:true, grid:10, showGrid:true,
     penDraft:null, penPreview:null, guideLines:null,
-    guides:{v:[],h:[]},
+    guides:{v:[],h:[]}, editingPathId:null,
     view:{x:-20,y:-20,w:340,h:240},
     params:[{id:'p_grubosc',name:'grubość_materiału',value:3,min:1,max:12,step:0.5}],
     history:[], hIndex:-1,
@@ -805,7 +810,21 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     if(state.penDraft){ renderPenDraft(); return; }              // tryb pióra: rysujemy szkic
     if(drag && drag.mode==='marquee') return;                   // marquee rysuje się sam
     const sel=getSelected();
+    if(state.editingPathId && (sel.length!==1 || sel[0].id!==state.editingPathId)) state.editingPathId=null;
     if(sel.length===0){ gOverlay.innerHTML=guideLinesMarkup(); return; }
+    if(sel.length===1 && state.editingPathId===sel[0].id && isEditablePolygonPath(sel[0])){
+      const o=sel[0];
+      const pts=pathPolyPoints(o.d);
+      const docPts=transformObjPts(o, pts.map(p=>p.slice()));
+      const hr=state.view.w*0.009, hit=hr*2.6;
+      let s=`<polygon points="${docPts.map(p=>fmt(p[0])+','+fmt(p[1])).join(' ')}" class="node-outline"/>`;
+      docPts.forEach((p,i)=>{
+        s+=`<circle data-node-idx="${i}" class="node-handle" cx="${fmt(p[0])}" cy="${fmt(p[1])}" r="${fmt(hit)}" fill="transparent"/>`;
+        s+=`<circle class="node-handle-vis" cx="${fmt(p[0])}" cy="${fmt(p[1])}" r="${fmt(hr)}"/>`;
+      });
+      gOverlay.innerHTML=s+guideLinesMarkup();
+      return;
+    }
     if(sel.length>1){                                           // wiele zaznaczonych: ramki + wspólny prostokąt, bez uchwytów
       let minx=Infinity,miny=Infinity,maxx=-Infinity,maxy=-Infinity, s='';
       sel.forEach(o=>{
@@ -1139,8 +1158,42 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     o.d=d; pushHistory(); renderObjects(); renderProps();
   }
 
+  /* ---------------- Edycja punktów ścieżki (Edit Points) ---------------- */
+  // tylko ścieżki z pojedynczym konturem zbudowanym z prostych odcinków (M..L..L..Z) da się edytować punkt po punkcie
+  function isEditablePolygonPath(o){
+    if(o.type!=='path'||!o.d) return false;
+    const d=o.d.trim();
+    return (d.match(/M/gi)||[]).length===1 && /^M[-\d.,\s]+(?:L[-\d.,\s]+)*Z?$/i.test(d);
+  }
+  // punkt z przestrzeni dokumentu -> lokalna przestrzeń ścieżki (odwrotność transformObjPts)
+  function docPtToLocal(o, dp){
+    const lcx=(o.bx||0)+(o.bw||0)/2, lcy=(o.by||0)+(o.bh||0)/2;
+    const sx=(o.sx||1)*(o.flipX?-1:1), sy=(o.sy||1)*(o.flipY?-1:1);
+    const r=deg2rad(o.rotation||0);
+    const p=rotatePt((dp.x-(o.x||0)), (dp.y-(o.y||0)), lcx, lcy, -r);
+    return [lcx+(p.x-lcx)/(sx||1), lcy+(p.y-lcy)/(sy||1)];
+  }
+  // po edycji punktów: jeśli ścieżka nie jest obrócona/przeskalowana, dopasuj jej bbox (bx,by,bw,bh) do nowych punktów
+  function recalcPathBBox(o){
+    if((o.rotation||0)!==0 || (o.sx&&o.sx!==1) || (o.sy&&o.sy!==1) || o.flipX || o.flipY) return;
+    const pts=pathPolyPoints(o.d); if(pts.length<2) return;
+    const bb=polysBBoxMulti([pts]);
+    o.bx=bb.minx; o.by=bb.miny; o.bw=Math.max(0.01,bb.maxx-bb.minx); o.bh=Math.max(0.01,bb.maxy-bb.miny);
+  }
+  function toggleNodeEdit(o){
+    state.editingPathId = (state.editingPathId===o.id) ? null : (isEditablePolygonPath(o)?o.id:null);
+    renderOverlay(); renderProps();
+  }
+  // rzut punktu na odcinek a-b -> najbliższy punkt leżący na odcinku
+  function projectOnSegment(p,a,b){
+    const dx=b[0]-a[0], dy=b[1]-a[1], len2=dx*dx+dy*dy;
+    let t=len2 ? ((p[0]-a[0])*dx+(p[1]-a[1])*dy)/len2 : 0;
+    t=Math.max(0,Math.min(1,t));
+    return [a[0]+t*dx, a[1]+t*dy];
+  }
+
   /* ---------------- Pointer interactions ---------------- */
-  let drag=null, spaceDown=false, guideClickInfo=null;
+  let drag=null, spaceDown=false, guideClickInfo=null, nodeClickInfo=null;
   const pointers=new Map(); let pinch=null;
   function trackPointer(e){ pointers.set(e.pointerId,{x:e.clientX,y:e.clientY}); }
 
@@ -1163,6 +1216,23 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       drag={mode:'guideMove', gtype, idx, orig:state.guides[gtype][idx]};
       renderGuides({moving:{type:gtype,idx,deleting:false}});
       return;
+    }
+    const nodeHit = !wantPan && state.editingPathId && e.target.closest && e.target.closest('.node-handle');
+    if(nodeHit){
+      const idx=Number(nodeHit.getAttribute('data-node-idx'));
+      const o=state.objects.find(x=>x.id===state.editingPathId);
+      if(o){
+        // szybkie ponowne kliknięcie tego samego punktu (bez przesunięcia) = usuń go
+        if(nodeClickInfo && nodeClickInfo.id===o.id && nodeClickInfo.idx===idx && Date.now()-nodeClickInfo.time<400){
+          nodeClickInfo=null;
+          const pts=pathPolyPoints(o.d);
+          if(pts.length>3){ pts.splice(idx,1); o.d=polyToPathD(pts); recalcPathBBox(o); pushHistory(); renderAll(); renderProps(); }
+          return;
+        }
+        setCapture(e);
+        drag={mode:'nodeMove', o, idx, moved:false};
+        return;
+      }
     }
     if(wantPan){ startPan(e); return; }
     const docP=clientToDoc(e);
@@ -1310,6 +1380,13 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     } else if(drag.mode==='resize'){
       doResize(drag,docP,e.shiftKey);
       renderObjects(); renderOverlay(); syncPropsLive();
+    } else if(drag.mode==='nodeMove'){
+      const lp=docPtToLocal(drag.o, {x:snap(docP.x), y:snap(docP.y)});
+      const pts=pathPolyPoints(drag.o.d);
+      pts[drag.idx]=lp;
+      drag.o.d=polyToPathD(pts);
+      drag.moved=true;
+      renderObjects(); renderOverlay();
     } else if(drag.mode==='guideNewH'){
       drag.y=snap(docP.y);
       renderGuides({preview:{type:'h',val:drag.y}});
@@ -1347,6 +1424,9 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     } else if(m==='move'||m==='resize'||m==='rotate'){
       if(state.guideLines){ state.guideLines=null; renderOverlay(); }
       pushHistory(); renderProps(); scheduleLive3D();
+    } else if(m==='nodeMove'){
+      if(drag.moved){ recalcPathBBox(o); nodeClickInfo=null; pushHistory(); renderAll(); renderProps(); scheduleLive3D(); }
+      else { nodeClickInfo={id:o.id, idx:drag.idx, time:Date.now()}; }
     } else if(m==='guideNewH'){
       if(pointInCanvas(e)) state.guides.h.push(drag.y);
       renderGuides(); autoSaveProject();
@@ -1559,6 +1639,12 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
         <input type="number" id="offsetVal" value="5" step="1" style="flex:0 0 90px">
         <button type="button" id="offsetBtn" class="tbtn" style="flex:1;justify-content:center">+ Utwórz obwódkę</button></div></div>`;
     }
+    if(o.type==='path' && isEditablePolygonPath(o)){
+      const editing=state.editingPathId===o.id;
+      h+=`<div class="field"><button type="button" id="nodeEditBtn" class="tbtn ${editing?'active':''}" style="width:100%;justify-content:center">${editing?'✓ Zakończ edycję punktów':'✏ Edytuj punkty'}</button>
+        ${editing?`<p style="font-size:.72rem;color:var(--muted);margin-top:4px;line-height:1.5">Przeciągnij punkt, aby zmienić kształt. Dwuklik na punkcie usuwa go (min. 3). Dwuklik na krawędzi dodaje nowy punkt. <kbd>Esc</kbd> kończy edycję.</p>`:''}
+      </div>`;
+    }
     if(o.type==='path' && (o.d.match(/M/g)||[]).length===1){
       h+=`<div class="field"><button type="button" id="smoothBtn" class="tbtn" style="width:100%;justify-content:center">〰 Wygładź w krzywe</button></div>`;
     }
@@ -1650,6 +1736,8 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     if(offBtn) offBtn.addEventListener('click',()=>{ const d=Number(propsEl.querySelector('#offsetVal').value)||0; if(d!==0) addOffsetFromSel(d); });
     const smBtn=propsEl.querySelector('#smoothBtn');
     if(smBtn) smBtn.addEventListener('click',()=>{ const o=getSel(); if(o) smoothPathObj(o); });
+    const nodeEditBtn=propsEl.querySelector('#nodeEditBtn');
+    if(nodeEditBtn) nodeEditBtn.addEventListener('click',()=>{ const o=getSel(); if(o) toggleNodeEdit(o); });
     const pathW=propsEl.querySelector('#pathW'), pathH=propsEl.querySelector('#pathH');
     function applyPathSize(){ const ob=getSel(); if(!ob||ob.type!=='path') return;
       const lcx=(ob.bx||0)+(ob.bw||0)/2, lcy=(ob.by||0)+(ob.bh||0)/2;
@@ -2067,7 +2155,30 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     applyView(); renderOverlay();
   }
 
-  canvas.addEventListener('dblclick', ()=>{ if(state.tool==='pen' && state.penDraft) penFinish(); });
+  canvas.addEventListener('dblclick', e=>{
+    if(state.tool==='pen' && state.penDraft){ penFinish(); return; }
+    // edycja punktów: dwuklik na krawędzi -> dodaj nowy punkt w tym miejscu
+    if(state.editingPathId && !(e.target.closest && e.target.closest('.node-handle'))){
+      const o=state.objects.find(x=>x.id===state.editingPathId);
+      if(o && isEditablePolygonPath(o)){
+        const docP=clientToDoc(e);
+        const lp=docPtToLocal(o,{x:docP.x,y:docP.y});
+        const pts=pathPolyPoints(o.d);
+        let bestIdx=-1, bestDist=Infinity, bestPt=null;
+        for(let i=0;i<pts.length;i++){
+          const a=pts[i], b=pts[(i+1)%pts.length];
+          const proj=projectOnSegment(lp,a,b);
+          const dist=Math.hypot(lp[0]-proj[0],lp[1]-proj[1]);
+          if(dist<bestDist){ bestDist=dist; bestIdx=i; bestPt=proj; }
+        }
+        const TH=state.view.w*0.02;
+        if(bestIdx>=0 && bestDist<TH){
+          pts.splice(bestIdx+1,0,bestPt);
+          o.d=polyToPathD(pts); recalcPathBBox(o); pushHistory(); renderAll(); renderProps();
+        }
+      }
+    }
+  });
   /* keyboard */
   window.addEventListener('keyup',e=>{ if(e.code==='Space'){ spaceDown=false; if(!drag) updateCanvasCursor(); } });
   window.addEventListener('keydown',e=>{
@@ -2075,6 +2186,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     if(e.key==='Escape'){
       const openModal=document.querySelector('.modal-ov.open');
       if(openModal){ e.preventDefault(); openModal.classList.remove('open'); return; }
+      if(state.editingPathId && !typing){ e.preventDefault(); state.editingPathId=null; renderOverlay(); renderProps(); return; }
     }
     if(e.key==='?' && !typing){ e.preventDefault(); showHelp(); return; }
     if(state.penDraft && !typing){ if(e.key==='Enter'){ e.preventDefault(); penFinish(); return; } if(e.key==='Escape'){ e.preventDefault(); penCancel(); return; } }
