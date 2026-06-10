@@ -128,6 +128,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 .layer .lico:hover{opacity:1;background:rgba(255,255,255,.08)}
 .layer .swatch{width:11px;height:11px;border-radius:3px;flex:0 0 auto}
 .sw-cut{background:var(--cut)} .sw-engrave{background:var(--engrave);border:1px solid #555} .sw-score{background:var(--score)}
+.sw-reference{background:repeating-linear-gradient(45deg,#888,#888 2px,#3a3a3a 2px,#3a3a3a 4px);border:1px solid #666}
 
 /* ---- Parameters (parametry globalne) ---- */
 .params{display:flex;flex-direction:column;gap:8px;padding:0 14px 12px}
@@ -299,6 +300,8 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       <button class="tbtn" id="saveProjectBtn" title="Zapisz cały projekt do pliku .json (do wczytania później)">💾 Zapisz projekt</button>
       <button class="tbtn" id="loadProjectBtn" title="Wczytaj projekt z pliku .json">📂 Otwórz projekt</button>
       <input type="file" id="loadProjectInput" accept=".json,application/json" style="display:none">
+      <button class="tbtn" id="importImageBtn" title="Importuj obraz (PNG/JPG) jako warstwę pomocniczą do przerysowania — nie jest cięty ani eksportowany">🖼 Importuj obraz</button>
+      <input type="file" id="importImageInput" accept="image/*" style="display:none">
     </div>
     <div class="tgroup">
       <button class="tbtn" id="loadFontsBtn" title="Wczytaj czcionki zainstalowane na komputerze (Chrome/Edge)">🔤 Czcionki z PC</button>
@@ -654,6 +657,10 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       const tsx=(o.tsx||1)*(o.flipX?-1:1), tsy=(o.tsy||1)*(o.flipY?-1:1);
       if(tsx!==1||tsy!==1) txt=`<g transform="translate(${fmt(o.x)} ${fmt(yBase)}) scale(${fmt(tsx)} ${fmt(tsy)}) translate(${fmt(-o.x)} ${fmt(-yBase)})">${txt}</g>`;
       geo=txt;
+    } else if(o.type==='image'){
+      // obraz pomocniczy (kalka) — tylko podgląd w edytorze, pomijany przy eksporcie SVG i w wizualizacji 3D
+      if(_silFill||forExport){ geo=''; }
+      else { const op=fmt((o.opacity??100)/100); geo=`<image href="${o.src}" x="${fmt(o.x)}" y="${fmt(o.y)}" width="${fmt(o.w)}" height="${fmt(o.h)}" preserveAspectRatio="none" opacity="${op}"/>`; }
     } else {
       const d=shapeD(o);
       if(_silFill){ geo=`<path d="${d}" fill="${_silFill}" stroke="${_silFill}" stroke-width="0.6"/>`; }
@@ -943,9 +950,10 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     if(type==='star') return {...base,points:5,inner:0.5};
     if(type==='line') return {...base,flip:false,mode:'score'};
     if(type==='text') return {...base,text:'Tekst',font:FONTS[0][0],fontSize:24};
+    if(type==='image') return {...base,mode:'reference',opacity:100,lockAspect:true};
     return base;
   }
-  const TYPE_NAMES={rect:'Prostokąt',ellipse:'Elipsa',polygon:'Wielokąt',star:'Gwiazda',line:'Linia',text:'Tekst'};
+  const TYPE_NAMES={rect:'Prostokąt',ellipse:'Elipsa',polygon:'Wielokąt',star:'Gwiazda',line:'Linia',text:'Tekst',image:'Obraz'};
   function autoName(o){ return o.name|| (TYPE_NAMES[o.type]||'Kształt'); }
 
   function addObject(o,{commit=true}={}){
@@ -1560,6 +1568,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     if(selArr.length>1){ renderMultiProps(selArr); return; }
     const o=getSel();
     if(!o){ propsEl.innerHTML=`<div class="empty-note">Nic nie zaznaczono.<br><br>Wybierz narzędzie u góry i narysuj kształt na płycie, albo kliknij gotowy szablon po lewej. Potem zaznacz element, aby zmieniać jego rozmiar, obrót, tryb (cięcie / grawer / nacięcie) i powielanie.<br><br>Aby zaznaczyć kilka elementów naraz: trzymaj <strong>Shift</strong> i klikaj, albo zaznacz je <strong>ramką</strong> na pustym polu.</div>`; return; }
+    if(o.type==='image'){ renderImageProps(o); return; }
     let h='';
     // mode
     h+=`<div class="field"><label>Tryb (operacja lasera)</label><div class="seg" data-seg="mode">
@@ -1671,6 +1680,83 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     propsEl.innerHTML=h;
     bindProps();
   }
+  /* ---- Właściwości obrazu pomocniczego (kalka do przerysowania) ---- */
+  function renderImageProps(o){
+    let h='';
+    h+=`<div class="empty-note" style="padding-bottom:4px">🖼 Obraz pomocniczy — widoczny tylko w edytorze, nie jest cięty ani uwzględniany w eksporcie SVG / podglądzie 3D.</div>`;
+    h+=`<div class="field"><label>Pozycja X (mm)</label><input type="number" data-prop="x" value="${fmt(o.x)}" step="1"></div>`;
+    h+=`<div class="field"><label>Pozycja Y (mm)</label><input type="number" data-prop="y" value="${fmt(o.y)}" step="1"></div>`;
+    h+=`<div class="field"><label>Szerokość (mm)</label><input type="number" id="imgW" value="${fmt(o.w)}" min="1" step="1"></div>`;
+    h+=`<div class="field"><label>Wysokość (mm)</label><input type="number" id="imgH" value="${fmt(o.h)}" min="1" step="1"></div>`;
+    h+=`<div class="field"><label class="check-label"><input type="checkbox" id="imgLockRatio" ${o.lockAspect?'checked':''}> Zachowaj proporcje przy zmianie rozmiaru</label></div>`;
+    h+=rangeField('Obrót (°)','rotation',o.rotation||0,0,360,1,o);
+    h+=rangeField('Przezroczystość (%)','opacity',o.opacity??100,0,100,1);
+    h+=`<div class="field"><button type="button" id="imgReplaceBtn" class="tbtn" style="width:100%;justify-content:center">🔄 Zamień obraz</button></div>`;
+    propsEl.innerHTML=h;
+    bindProps();
+    bindImageProps(o);
+  }
+  function bindImageProps(o){
+    const imgW=propsEl.querySelector('#imgW'), imgH=propsEl.querySelector('#imgH');
+    const ratio=()=> (o.naturalW&&o.naturalH)? o.naturalW/o.naturalH : (o.h? (o.w||1)/o.h : 1);
+    if(imgW) imgW.addEventListener('change',()=>{
+      const nw=Math.max(1,Number(imgW.value)||1); o.w=nw;
+      if(o.lockAspect) o.h=Math.max(1,Math.round(nw/ratio()*100)/100);
+      renderAll(); renderProps(); pushHistory(); });
+    if(imgH) imgH.addEventListener('change',()=>{
+      const nh=Math.max(1,Number(imgH.value)||1); o.h=nh;
+      if(o.lockAspect) o.w=Math.max(1,Math.round(nh*ratio()*100)/100);
+      renderAll(); renderProps(); pushHistory(); });
+    const lockChk=propsEl.querySelector('#imgLockRatio');
+    if(lockChk) lockChk.addEventListener('change',()=>{ o.lockAspect=lockChk.checked; pushHistory(); });
+    const replaceBtn=propsEl.querySelector('#imgReplaceBtn');
+    if(replaceBtn) replaceBtn.addEventListener('click',()=>{
+      pendingImageReplaceId=o.id;
+      const inp=document.getElementById('importImageInput'); inp.value=''; inp.click();
+    });
+  }
+  /* Wczytuje plik obrazu (PNG/JPG/...) jako nowy obiekt typu 'image' (lub podmienia istniejący, gdy podano replaceId).
+     Obraz jest skalowany do max. 1600px po dłuższym boku i re-kompresowany, by nie rozdmuchać
+     historii cofania / autozapisu (które trzymają pełny JSON projektu). */
+  let pendingImageReplaceId=null;
+  function importImageFile(file){
+    if(!file || !/^image\//.test(file.type)){ alert('Wybierz plik obrazu (PNG, JPG, itp.).'); return; }
+    const replaceId=pendingImageReplaceId; pendingImageReplaceId=null;
+    const reader=new FileReader();
+    reader.onload=()=>{
+      const img=new Image();
+      img.onload=()=>{
+        const nw0=img.naturalWidth||100, nh0=img.naturalHeight||100;
+        const MAX=1600, sc=Math.min(1,MAX/Math.max(nw0,nh0));
+        const cw=Math.max(1,Math.round(nw0*sc)), ch=Math.max(1,Math.round(nh0*sc));
+        const cnv=document.createElement('canvas'); cnv.width=cw; cnv.height=ch;
+        const ctx=cnv.getContext('2d'); ctx.drawImage(img,0,0,cw,ch);
+        const isPng=/png/.test(file.type);
+        const src=isPng? cnv.toDataURL('image/png') : cnv.toDataURL('image/jpeg',0.86);
+        if(replaceId){
+          const ob=state.objects.find(x=>x.id===replaceId); if(!ob) return;
+          ob.src=src; ob.naturalW=nw0; ob.naturalH=nh0;
+          renderAll(); renderProps(); pushHistory();
+        } else {
+          const maxW=state.docW*0.6, maxH=state.docH*0.6;
+          const fit=Math.min(maxW/nw0, maxH/nh0, 1);
+          const w=Math.max(1,Math.round(nw0*fit)), h=Math.max(1,Math.round(nh0*fit));
+          const o={...defaultsFor('image'), src, naturalW:nw0, naturalH:nh0, w, h, x:Math.round((state.docW-w)/2), y:Math.round((state.docH-h)/2)};
+          addObject(o);
+        }
+      };
+      img.onerror=()=>alert('Nie udało się wczytać obrazu.');
+      img.src=reader.result;
+    };
+    reader.readAsDataURL(file);
+  }
+  document.getElementById('importImageBtn').addEventListener('click',()=>{
+    pendingImageReplaceId=null;
+    const inp=document.getElementById('importImageInput'); inp.value=''; inp.click();
+  });
+  document.getElementById('importImageInput').addEventListener('change',e=>{
+    importImageFile(e.target.files[0]);
+  });
   function rangeField(label,prop,val,min,max,step,o){
     const bound=o&&isBound(o,prop);
     const v=bound? boundVal(o,prop) : val;
@@ -1916,7 +2002,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   function renderLayers(){
     if(!state.objects.length){ layersEl.innerHTML=`<div style="padding:4px 6px;font-size:.78rem;color:var(--muted)">Brak elementów.</div>`; return; }
     layersEl.innerHTML=state.objects.slice().reverse().map(o=>{
-      const sw=o.mode==='engrave'?'sw-engrave':o.mode==='score'?'sw-score':'sw-cut';
+      const sw=o.mode==='engrave'?'sw-engrave':o.mode==='score'?'sw-score':o.mode==='reference'?'sw-reference':'sw-cut';
       const d=o.depth||1; const dc=d<=6?`d${d}`:'dN';
       const dbadge=`<span class="d-badge ${dc}" title="Warstwa 3D ${d}">W${d}</span>`;
       return `<div class="layer ${state.selectedIds.includes(o.id)?'sel':''}" data-id="${o.id}">
@@ -2343,7 +2429,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
 
   function showExport3D(){
     const W=state.docW, H=state.docH;
-    const vis=state.objects.filter(o=>o.visible);
+    const vis=state.objects.filter(o=>o.visible && o.type!=='image');
     if(!vis.length){ alert('Projekt jest pusty — nie ma czego eksportować.'); return; }
     const depths=[...new Set(vis.map(o=>o.depth||1))].sort((a,b)=>a-b);
     const grid=document.getElementById('layers3dGrid');
@@ -2449,7 +2535,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   // dzięki czemu grubsza warstwa jest realnie wyższa w wizualizacji.
   function buildLayerScene(sceneEl, sw, pxPerMM){
     const W=state.docW, H=state.docH;
-    const vis=state.objects.filter(o=>o.visible && !state.hiddenDepths.includes(o.depth||1));
+    const vis=state.objects.filter(o=>o.visible && o.type!=='image' && !state.hiddenDepths.includes(o.depth||1));
     const depths=[...new Set(vis.map(o=>o.depth||1))].sort((a,b)=>a-b);
     if(!vis.length||!depths.length){ sceneEl.innerHTML=''; sceneEl.dataset.empty='1'; return 0; }
     sceneEl.dataset.empty='';
@@ -2507,7 +2593,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
 
   // łączna grubość stosu w mm (do auto-skalowania wizualizacji)
   function totalStackMM(){
-    const vis=state.objects.filter(o=>o.visible && !state.hiddenDepths.includes(o.depth||1));
+    const vis=state.objects.filter(o=>o.visible && o.type!=='image' && !state.hiddenDepths.includes(o.depth||1));
     const depths=[...new Set(vis.map(o=>o.depth||1))];
     return depths.reduce((s,d)=>s+layerMM(d),0)||3;
   }
@@ -2550,7 +2636,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   let p3dRot={x:54,z:-24}, p3dDrag=null;
   function showPreview3D(){
     const W=state.docW, H=state.docH;
-    const vis=state.objects.filter(o=>o.visible && !state.hiddenDepths.includes(o.depth||1));
+    const vis=state.objects.filter(o=>o.visible && o.type!=='image' && !state.hiddenDepths.includes(o.depth||1));
     if(!vis.length){ alert('Brak widocznych elementów do wizualizacji 3D.'); return; }
     const scene=document.getElementById('p3dScene');
     const sw=Math.min(360, Math.round(W/H*300));
@@ -2648,7 +2734,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   }
   function buildSeparatedSVG(){
     const W=state.docW,H=state.docH;
-    const vis=state.objects.filter(o=>o.visible && !state.hiddenDepths.includes(o.depth||1));
+    const vis=state.objects.filter(o=>o.visible && o.type!=='image' && !state.hiddenDepths.includes(o.depth||1));
     const depths=[...new Set(vis.map(o=>o.depth||1))].sort((a,b)=>a-b);
     if(!depths.length) return null;
     const gap=14, labelH=11;
@@ -2683,7 +2769,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   /* ---------------- Export ---------------- */
   function exportSVG(){
     const W=state.docW,H=state.docH;
-    const body=state.objects.filter(o=>o.visible).map(o=>objMarkup(o,true)).join('');
+    const body=state.objects.filter(o=>o.visible && o.type!=='image').map(o=>objMarkup(o,true)).join('');
     const svg=`<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="${SVG_NS}" viewBox="0 0 ${W} ${H}" width="${W}mm" height="${H}mm">\n${body}\n</svg>`;
     const blob=new Blob([svg],{type:'image/svg+xml'}); const url=URL.createObjectURL(blob);
     const a=document.createElement('a'); a.href=url; a.download=`projekt-laser-${Date.now()}.svg`;
