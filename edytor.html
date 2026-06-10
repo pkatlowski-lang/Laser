@@ -232,6 +232,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
 .live3d-scene{transform-style:preserve-3d;position:relative}
 .l3d-layer{position:absolute;top:0;left:0;transform-style:preserve-3d}
 .l3d-layer svg{display:block}
+.l3d-wall{position:absolute;top:0;left:0;transform-origin:0 0}
 .bb-svg{flex:1;overflow:auto;background:#0e0e16;display:flex;align-items:center;justify-content:center;padding:10px}
 .bb-svg svg{max-width:100%;max-height:100%;background:#fff;border-radius:4px}
 .bb-svg .bb-empty{color:#555;font-size:.74rem}
@@ -628,7 +629,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       const t=`translate(${fmt(o.x||0)} ${fmt(o.y||0)}) rotate(${fmt(o.rotation||0)} ${fmt(lcx)} ${fmt(lcy)})${scalePart}`;
       const fr=o.fillRule==='evenodd'?' fill-rule="evenodd"':'';
       let geo;
-      if(_silFill){ geo=`<path d="${o.d}" fill="${_silFill}" stroke="none"${fr}/>`; }
+      if(_silFill){ geo=`<path d="${o.d}" fill="${_silFill}" stroke="${_silFill}" stroke-width="0.6"${fr}/>`; }
       else if(forExport){ geo=`<path d="${o.d}"${exportShapeStyle(o)}${fr}/>`; }
       else if(state.depthView){ const dc=depthColor(o.depth||1); geo=`<path d="${o.d}" fill="${dc}" fill-opacity=".38" stroke="${dc}" stroke-width=".8" vector-effect="non-scaling-stroke"${fr}/>`; }
       else { const cls=o.mode==='engrave'?'geo-engrave':o.mode==='score'?'geo-score':'geo-cut'; geo=`<path d="${o.d}" class="${cls}"${fr}/>`; }
@@ -642,7 +643,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       const yBase=o.y + fs*0.34; // o.y stored as vertical center for text
       const deco=`${o.bold?'font-weight:700;':''}${o.italic?'font-style:italic;':''}${o.underline?'text-decoration:underline;':''}`;
       let cls='', styleCss='';
-      if(_silFill) styleCss=`fill:${_silFill};`;
+      if(_silFill) styleCss=`fill:${_silFill};stroke:${_silFill};stroke-width:0.6px;`;
       else if(forExport) styleCss=exportTextStyle(o);
       else if(state.depthView) styleCss=`fill:${depthColor(o.depth||1)};`;
       else cls=o.mode==='engrave'?'geo-engrave-txt':o.mode==='score'?'geo-score-txt':'geo-cut-txt';
@@ -655,7 +656,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       geo=txt;
     } else {
       const d=shapeD(o);
-      if(_silFill){ geo=`<path d="${d}" fill="${_silFill}" stroke="none"/>`; }
+      if(_silFill){ geo=`<path d="${d}" fill="${_silFill}" stroke="${_silFill}" stroke-width="0.6"/>`; }
       else if(forExport){ geo=`<path d="${d}"${exportShapeStyle(o)}/>`; }
       else if(state.depthView){ const dc=depthColor(o.depth||1); geo=`<path d="${d}" fill="${dc}" fill-opacity=".38" stroke="${dc}" stroke-width=".8" vector-effect="non-scaling-stroke"/>`; }
       else { const cls=o.mode==='engrave'?'geo-engrave':o.mode==='score'?'geo-score':'geo-cut'; geo=`<path d="${d}" class="${cls}"/>`; }
@@ -2454,26 +2455,50 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     sceneEl.dataset.empty='';
     const sh=Math.round(H/W*sw);
     sceneEl.style.width=sw+'px'; sceneEl.style.height=sh+'px';
+    const scale=sw/W;
     const svgOpen=`<svg viewBox="0 0 ${W} ${H}" width="${sw}" height="${sh}" xmlns="${SVG_NS}" style="position:absolute;top:0;left:0">`;
     let html='', zBase=0;
     depths.forEach(dep=>{
-      const col=depthColor(dep);
+      const col=depthColor(dep), wallCol=darkenHex(col,0.55);
       const mm=layerMM(dep);
       const thick=Math.max(3, mm*pxPerMM);     // grubość płyty w px (proporcjonalna do mm)
-      const slices=Math.max(2,Math.min(10,Math.round(thick/3.2)));
       // KUMULATYWNA sylwetka: wszystkie elementy na warstwach >= dep
       const objs=vis.filter(o=>(o.depth||1)>=dep);
-      _silFill=col;
-      const topBody=objs.map(o=>objMarkup(o,false)).join('');
-      _silFill=darkenHex(col,0.55);
-      const wallBody=objs.map(o=>objMarkup(o,false)).join('');
-      _silFill=null;
+      const geomObjs=objs.filter(o=>BOOL_TYPES.includes(o.type));
+      const otherObjs=objs.filter(o=>!BOOL_TYPES.includes(o.type));
+      // scalony obrys geometrii (bez wewnętrznych linii) — jedna ścieżka, otwory przez fill-rule evenodd
+      const rings=mergeLayerRings(geomObjs, dep);
       const zTop=zBase+thick;                   // górna ścianka tej płyty
+      // ---- ściany boczne: prawdziwe pionowe "kwadraty" wzdłuż każdej krawędzi obrysu ----
       let walls='';
-      for(let j=slices-1;j>=1;j--){ const z=zBase+(j/slices)*thick;
-        walls+=`<div class="l3d-layer" style="width:${sw}px;height:${sh}px;transform:translateZ(${fmt(z)}px)">${svgOpen}${wallBody}</svg></div>`; }
-      const top=`<div class="l3d-layer" style="width:${sw}px;height:${sh}px;transform:translateZ(${fmt(zTop)}px)">${svgOpen}${topBody}</svg></div>`;
-      html+=walls+top;
+      rings.forEach(ring=>{
+        const n=ring.length;
+        for(let i=0;i<n;i++){
+          const a=ring[i], b=ring[(i+1)%n];
+          const ax=a[0]*scale, ay=a[1]*scale, bx=b[0]*scale, by=b[1]*scale;
+          const dx=bx-ax, dy=by-ay, len=Math.hypot(dx,dy);
+          if(len<0.05) continue;
+          const ang=Math.atan2(dy,dx)*180/Math.PI;
+          walls+=`<div class="l3d-wall" style="width:${fmt(len)}px;height:${fmt(thick)}px;background:${wallCol};transform:translate3d(${fmt(ax)}px,${fmt(ay)}px,${fmt(zBase)}px) rotateZ(${fmt(ang)}deg) rotateX(90deg)"></div>`;
+        }
+      });
+      // ---- góra płyty: jeden scalony kształt (bez szwów) + ewentualne elementy nie-geometryczne (tekst) ----
+      const topPath=rings.length?`<path d="${rings.map(polyToPathD).join(' ')}" fill="${col}" fill-rule="evenodd" stroke="${col}" stroke-width="0.6"/>`:'';
+      _silFill=col;
+      const topOther=otherObjs.map(o=>objMarkup(o,false)).join('');
+      _silFill=null;
+      const top=`<div class="l3d-layer" style="width:${sw}px;height:${sh}px;transform:translateZ(${fmt(zTop)}px)">${svgOpen}${topPath}${topOther}</svg></div>`;
+      // ---- elementy nie-geometryczne (np. tekst) bez własnej geometrii do ekstruzji -> kilka cienkich warstw jako przybliżenie bryły ----
+      let otherWalls='';
+      if(otherObjs.length){
+        const slices=Math.max(2,Math.min(6,Math.round(thick/4)));
+        _silFill=wallCol;
+        const wallBody=otherObjs.map(o=>objMarkup(o,false)).join('');
+        _silFill=null;
+        for(let j=slices-1;j>=1;j--){ const z=zBase+(j/slices)*thick;
+          otherWalls+=`<div class="l3d-layer" style="width:${sw}px;height:${sh}px;transform:translateZ(${fmt(z)}px)">${svgOpen}${wallBody}</svg></div>`; }
+      }
+      html+=otherWalls+walls+top;
       zBase=zTop;                               // następna warstwa zaczyna się na wierzchu tej
     });
     sceneEl.innerHTML=html;
@@ -2582,17 +2607,40 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     }
     return list;
   }
+  // Uproszczenie zamkniętego konturu (Douglas-Peucker) — usuwa nadmiarowe punkty
+  // z gęstego próbkowania krzywych, zachowując kształt w granicach tolerancji `tol`
+  // (mm). Potrzebne, by liczba boków ściany w wizualizacji 3D była rozsądna.
+  function simplifyRing(pts, tol){
+    const n=pts.length; if(n<=4) return pts;
+    function rdp(a){
+      if(a.length<3) return a;
+      const [x1,y1]=a[0], [x2,y2]=a[a.length-1]; const dx=x2-x1, dy=y2-y1, len=Math.hypot(dx,dy)||1e-9;
+      let dmax=0, idx=0;
+      for(let i=1;i<a.length-1;i++){ const [x0,y0]=a[i]; const d=Math.abs(dy*x0-dx*y0+x2*y1-y2*x1)/len; if(d>dmax){ dmax=d; idx=i; } }
+      if(dmax>tol) return rdp(a.slice(0,idx+1)).slice(0,-1).concat(rdp(a.slice(idx)));
+      return [a[0],a[a.length-1]];
+    }
+    const half=Math.floor(n/2);
+    const s1=rdp(pts.slice(0,half+1)), s2=rdp(pts.slice(half).concat([pts[0]]));
+    const out=s1.slice(0,-1).concat(s2.slice(0,-1));
+    return out.length>=3?out:pts;
+  }
   // Łączy obrys jednej warstwy: powłoki (duże kontury) sumuje, otwory (kontury wewnątrz
   // powłok) zostawia jako osobne cięcia. Zwraca tablicę pierścieni do narysowania.
-  function mergeLayerRings(objs){
+  // dep = numer warstwy, dla której budujemy plik. Kontury z wyższych warstw (depth>dep)
+  // służą tylko jako "podpora" — jeśli mieszczą się w obrysie tej płyty, NIE tworzą
+  // dodatkowego otworu/linii (płyta pod nimi musi pozostać pełna, bo to na niej leżą).
+  function mergeLayerRings(objs, dep){
     let rings=[];
-    objs.forEach(o=>{ objSubPolys(o).forEach(r=>{ if(r.length>=3) rings.push({pts:r, area:Math.abs(polyArea(r)), c:polyCentroid(r)}); }); });
+    objs.forEach(o=>{ const own=(o.depth||1)===dep;
+      objSubPolys(o).forEach(r=>{ const sr=simplifyRing(r,0.15); if(sr.length>=3) rings.push({pts:sr, area:Math.abs(polyArea(sr)), c:polyCentroid(sr), own}); }); });
     if(!rings.length) return [];
     rings.sort((a,b)=>b.area-a.area);
     // klasyfikacja: pierścień jest "otworem", jeśli jego środek leży w innym (większym) pierścieniu
     const shells=[], holes=[];
     rings.forEach(r=>{
       const inside=rings.some(o=>o!==r && o.area>r.area && pointInPoly(r.c, o.pts));
+      if(inside && !r.own) return; // kontur wyższej warstwy w pełni objęty inną sylwetką -> pomijamy (bez duplikatu linii)
       (inside?holes:shells).push(r);
     });
     const merged=unionAll(shells.map(s=>s.pts));
@@ -2610,7 +2658,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       const ox=i*(W+gap), col=depthColor(dep);
       // kształty (nie-tekstowe) na warstwach >= dep łączymy w jeden obrys (model podpierający)
       const cutObjs=vis.filter(o=>o.type!=='text' && (o.depth||1)>=dep && o.mode!=='engrave');
-      const rings=mergeLayerRings(cutObjs);
+      const rings=mergeLayerRings(cutObjs, dep);
       const cutPaths=rings.map(r=>`<path d="${polyToPathD(r)}" fill="none" stroke="${COLORS.cut}" stroke-width="0.3"/>`).join('');
       // napisy (cięcie/nacięcie) nie da się scalić w jeden obrys (brak danych konturu czcionki) —
       // rysujemy je jako osobne <text> z konturem, na każdej warstwie którą podpierają
