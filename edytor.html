@@ -45,9 +45,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 
 /* ---- Linijki (rulery) wzdłuż krawędzi płótna ---- */
 .ruler{position:absolute;background:var(--surface2);overflow:hidden;pointer-events:none;z-index:2;font-size:9px;color:var(--muted);font-family:var(--font-b)}
-.ruler-h{top:0;left:22px;right:0;height:20px;border-bottom:1px solid var(--border)}
-.ruler-v{top:20px;left:0;bottom:0;width:22px;border-right:1px solid var(--border)}
-.ruler-corner{position:absolute;top:0;left:0;width:22px;height:20px;background:var(--surface2);border-right:1px solid var(--border);border-bottom:1px solid var(--border);z-index:3}
+.ruler-h{top:0;left:22px;right:0;height:20px;border-bottom:1px solid var(--border);pointer-events:auto;cursor:ns-resize}
+.ruler-v{top:20px;left:0;bottom:0;width:22px;border-right:1px solid var(--border);pointer-events:auto;cursor:ew-resize}
+.ruler-corner{position:absolute;top:0;left:0;width:22px;height:20px;background:var(--surface2);border-right:1px solid var(--border);border-bottom:1px solid var(--border);z-index:3;cursor:pointer}
 .ruler-tick{position:absolute}
 .ruler-h .ruler-tick{top:0;bottom:0;border-left:1px solid var(--border)}
 .ruler-h .ruler-tick.minor{border-left-color:var(--surface)}
@@ -85,6 +85,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 .sel-rot-line{stroke:var(--accent);stroke-width:1.3px;vector-effect:non-scaling-stroke}
 .sel-rot{fill:var(--accent);stroke:#fff;stroke-width:1.2px;vector-effect:non-scaling-stroke}
 .guide-line{stroke:#ff4fa6;stroke-width:1px;stroke-dasharray:5 4;vector-effect:non-scaling-stroke;pointer-events:none}
+
+/* ---- Linie pomocnicze (rulery -> przeciągane prowadnice) ---- */
+.guide-line-vis{stroke:#39d6ff;stroke-width:1px;vector-effect:non-scaling-stroke;pointer-events:none}
+.guide-line-vis.guide-preview{stroke-dasharray:4 3;opacity:.75}
+.guide-line-vis.guide-deleting{stroke:#ff5f5f}
+.guide-hit{stroke:transparent;stroke-width:9px;fill:none;vector-effect:non-scaling-stroke;pointer-events:stroke}
+.guide-hit-h{cursor:ns-resize}
+.guide-hit-v{cursor:ew-resize}
 
 /* ---- Property fields ---- */
 .field{padding:0 16px 12px}
@@ -341,9 +349,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
         <label>Wys.</label><input type="number" id="ttH" min="1" step="1" title="Wysokość napisu (mm) — rozciąganie">
         <button type="button" class="tbtn" id="ttReset" title="Przywróć proporcje 1:1">↺</button>
       </div>
-      <div class="ruler-corner"></div>
-      <div class="ruler ruler-h" id="rulerH"></div>
-      <div class="ruler ruler-v" id="rulerV"></div>
+      <div class="ruler-corner" id="rulerCorner" title="Dwuklik: usuń wszystkie linie pomocnicze"></div>
+      <div class="ruler ruler-h" id="rulerH" title="Przeciągnij w dół, aby utworzyć linię pomocniczą"></div>
+      <div class="ruler ruler-v" id="rulerV" title="Przeciągnij w prawo, aby utworzyć linię pomocniczą"></div>
       <svg id="canvas" xmlns="http://www.w3.org/2000/svg"></svg>
       <div class="hint-empty" id="hintEmpty">Wybierz narzędzie i narysuj kształt na płycie — albo kliknij szablon po lewej</div>
     </section>
@@ -449,6 +457,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     tool:'select',
     snap:true, grid:10,
     penDraft:null, penPreview:null, guideLines:null,
+    guides:{v:[],h:[]},
     view:{x:-20,y:-20,w:340,h:240},
     params:[{id:'p_grubosc',name:'grubość_materiału',value:3,min:1,max:12,step:0.5}],
     history:[], hIndex:-1,
@@ -598,14 +607,19 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 
   /* ---------------- Canvas rendering ---------------- */
   const canvas=document.getElementById('canvas');
-  let gGrid, gObjects, gOverlay;
+  let gGrid, gObjects, gOverlay, gGuides;
   function buildCanvasSkeleton(){
-    canvas.innerHTML=`<g id="gGrid"></g><g id="gObjects"></g><g id="gOverlay"></g>`;
+    canvas.innerHTML=`<g id="gGrid"></g><g id="gObjects"></g><g id="gOverlay"></g><g id="gGuides"></g>`;
     gGrid=canvas.querySelector('#gGrid');
     gObjects=canvas.querySelector('#gObjects');
     gOverlay=canvas.querySelector('#gOverlay');
+    gGuides=canvas.querySelector('#gGuides');
   }
   function canvasRect(){ return canvas.getBoundingClientRect(); }
+  function pointInCanvas(e){
+    const r=canvasRect();
+    return e.clientX>=r.left && e.clientX<=r.right && e.clientY>=r.top && e.clientY<=r.bottom;
+  }
   // Keep the viewBox aspect ratio equal to the on-screen canvas aspect ratio so
   // there is no letterboxing — this makes pan/zoom/pinch math exact and removes
   // "dead zones" where clicks landed outside the drawing area.
@@ -645,6 +659,34 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
       vHtml+=`<div class="ruler-tick" style="top:${py}px"><span class="rt-label">${Math.round(y)}</span></div>`;
     }
     rulerV.innerHTML=vHtml;
+  }
+  /* ---------------- Linie pomocnicze (przeciągane z linijek) ---------------- */
+  const GUIDE_EXT=10000;
+  function guideLineSVG(type,val,extraClass){
+    const cls='guide-line-vis'+(extraClass?' '+extraClass:'');
+    return type==='h'
+      ? `<line x1="${-GUIDE_EXT}" y1="${fmt(val)}" x2="${GUIDE_EXT}" y2="${fmt(val)}" class="${cls}"/>`
+      : `<line x1="${fmt(val)}" y1="${-GUIDE_EXT}" x2="${fmt(val)}" y2="${GUIDE_EXT}" class="${cls}"/>`;
+  }
+  function guideHitSVG(type,val,gidx){
+    return type==='h'
+      ? `<g class="guide-grp" data-gtype="h" data-gidx="${gidx}"><line x1="${-GUIDE_EXT}" y1="${fmt(val)}" x2="${GUIDE_EXT}" y2="${fmt(val)}" class="guide-hit guide-hit-h"/></g>`
+      : `<g class="guide-grp" data-gtype="v" data-gidx="${gidx}"><line x1="${fmt(val)}" y1="${-GUIDE_EXT}" x2="${fmt(val)}" y2="${GUIDE_EXT}" class="guide-hit guide-hit-v"/></g>`;
+  }
+  function renderGuides(opts){
+    if(!gGuides) return;
+    opts=opts||{};
+    let s='';
+    state.guides.v.forEach((x,i)=>{
+      const del=opts.moving&&opts.moving.type==='v'&&opts.moving.idx===i&&opts.moving.deleting;
+      s+=guideLineSVG('v',x,del?'guide-deleting':'')+guideHitSVG('v',x,i);
+    });
+    state.guides.h.forEach((y,i)=>{
+      const del=opts.moving&&opts.moving.type==='h'&&opts.moving.idx===i&&opts.moving.deleting;
+      s+=guideLineSVG('h',y,del?'guide-deleting':'')+guideHitSVG('h',y,i);
+    });
+    if(opts.preview) s+=guideLineSVG(opts.preview.type,opts.preview.val,'guide-preview');
+    gGuides.innerHTML=s;
   }
   function renderGrid(){
     const W=state.docW, H=state.docH, g=state.grid;
@@ -727,7 +769,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     gOverlay.innerHTML=s;
   }
 
-  function renderAll(){ renderObjects(); renderOverlay(); renderLayers(); renderDepthLegend(); document.getElementById('hintEmpty').style.display=state.objects.length?'none':''; if(typeof scheduleLive3D==='function') scheduleLive3D(); }
+  function renderAll(){ renderObjects(); renderOverlay(); renderGuides(); renderLayers(); renderDepthLegend(); document.getElementById('hintEmpty').style.display=state.objects.length?'none':''; if(typeof scheduleLive3D==='function') scheduleLive3D(); }
 
   /* ---------------- Selection helpers ---------------- */
   function getSelected(){ return state.objects.filter(o=>state.selectedIds.includes(o.id)); }
@@ -789,6 +831,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
       xs.push({v:b.minx},{v:(b.minx+b.maxx)/2},{v:b.maxx});
       ys.push({v:b.miny},{v:(b.miny+b.maxy)/2},{v:b.maxy});
     });
+    state.guides.v.forEach(x=>xs.push({v:x}));
+    state.guides.h.forEach(y=>ys.push({v:y}));
     return {xs,ys};
   }
 
@@ -1028,7 +1072,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
   }
 
   /* ---------------- Pointer interactions ---------------- */
-  let drag=null, spaceDown=false;
+  let drag=null, spaceDown=false, guideClickInfo=null;
   const pointers=new Map(); let pinch=null;
   function trackPointer(e){ pointers.set(e.pointerId,{x:e.clientX,y:e.clientY}); }
 
@@ -1036,6 +1080,22 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     trackPointer(e);
     if(pointers.size>=2){ beginPinch(); return; }              // two fingers -> pan/zoom
     const wantPan = e.button===1 || spaceDown || state.tool==='pan';
+    const guideHit = !wantPan && e.target.closest && e.target.closest('.guide-hit');
+    if(guideHit){
+      const grp=guideHit.closest('.guide-grp');
+      const gtype=grp.getAttribute('data-gtype'), idx=Number(grp.getAttribute('data-gidx'));
+      // szybkie ponowne kliknięcie tej samej linii pomocniczej (bez przesunięcia) = usuń ją
+      if(guideClickInfo && guideClickInfo.gtype===gtype && guideClickInfo.idx===idx && Date.now()-guideClickInfo.time<400){
+        guideClickInfo=null;
+        state.guides[gtype].splice(idx,1);
+        renderGuides(); autoSaveProject();
+        return;
+      }
+      setCapture(e);
+      drag={mode:'guideMove', gtype, idx, orig:state.guides[gtype][idx]};
+      renderGuides({moving:{type:gtype,idx,deleting:false}});
+      return;
+    }
     if(wantPan){ startPan(e); return; }
     const docP=clientToDoc(e);
     if(state.tool==='pen'){ penAddPoint(docP); return; }
@@ -1055,6 +1115,24 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     }
     // shape tools -> draw
     startDraw(e,docP);
+  });
+
+  // przeciągnięcie z linijki -> nowa linia pomocnicza
+  rulerH.addEventListener('pointerdown', e=>{
+    if(e.button!==0) return; e.preventDefault();
+    const docP=clientToDoc(e);
+    drag={mode:'guideNewH', y:snap(docP.y)};
+    renderGuides({preview:{type:'h',val:drag.y}});
+  });
+  rulerV.addEventListener('pointerdown', e=>{
+    if(e.button!==0) return; e.preventDefault();
+    const docP=clientToDoc(e);
+    drag={mode:'guideNewV', x:snap(docP.x)};
+    renderGuides({preview:{type:'v',val:drag.x}});
+  });
+  document.getElementById('rulerCorner').addEventListener('dblclick', ()=>{
+    if(!state.guides.v.length && !state.guides.h.length) return;
+    state.guides={v:[],h:[]}; renderGuides(); autoSaveProject();
   });
 
   function setCapture(e){ try{ canvas.setPointerCapture(e.pointerId); }catch(_){} }
@@ -1164,6 +1242,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     } else if(drag.mode==='resize'){
       doResize(drag,docP,e.shiftKey);
       renderObjects(); renderOverlay(); syncPropsLive();
+    } else if(drag.mode==='guideNewH'){
+      drag.y=snap(docP.y);
+      renderGuides({preview:{type:'h',val:drag.y}});
+    } else if(drag.mode==='guideNewV'){
+      drag.x=snap(docP.x);
+      renderGuides({preview:{type:'v',val:drag.x}});
+    } else if(drag.mode==='guideMove'){
+      const inside=pointInCanvas(e);
+      if(drag.gtype==='h') state.guides.h[drag.idx]=snap(docP.y);
+      else state.guides.v[drag.idx]=snap(docP.x);
+      renderGuides({moving:{type:drag.gtype,idx:drag.idx,deleting:!inside}});
     }
   });
   window.addEventListener('pointerup', e=>{
@@ -1190,10 +1279,25 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     } else if(m==='move'||m==='resize'||m==='rotate'){
       if(state.guideLines){ state.guideLines=null; renderOverlay(); }
       pushHistory(); renderProps(); scheduleLive3D();
+    } else if(m==='guideNewH'){
+      if(pointInCanvas(e)) state.guides.h.push(drag.y);
+      renderGuides(); autoSaveProject();
+    } else if(m==='guideNewV'){
+      if(pointInCanvas(e)) state.guides.v.push(drag.x);
+      renderGuides(); autoSaveProject();
+    } else if(m==='guideMove'){
+      if(!pointInCanvas(e)){ state.guides[drag.gtype].splice(drag.idx,1); guideClickInfo=null; }
+      else if(state.guides[drag.gtype][drag.idx]===drag.orig){ guideClickInfo={gtype:drag.gtype, idx:drag.idx, time:Date.now()}; }
+      else { guideClickInfo=null; }
+      renderGuides(); autoSaveProject();
     }
     drag=null;
   });
-  window.addEventListener('pointercancel', e=>{ pointers.delete(e.pointerId); if(pointers.size<2) pinch=null; drag=null; if(state.guideLines){ state.guideLines=null; renderOverlay(); } });
+  window.addEventListener('pointercancel', e=>{
+    pointers.delete(e.pointerId); if(pointers.size<2) pinch=null;
+    if(drag&&(drag.mode==='guideNewH'||drag.mode==='guideNewV'||drag.mode==='guideMove')) renderGuides();
+    drag=null; if(state.guideLines){ state.guideLines=null; renderOverlay(); }
+  });
 
   function doResize(d,docP,shift){
     const o=d.o;
@@ -1782,7 +1886,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     return {
       version:1, docW:state.docW, docH:state.docH,
       objects:state.objects, params:state.params, layerMM:state.layerMM,
-      hiddenDepths:state.hiddenDepths, depthView:state.depthView
+      hiddenDepths:state.hiddenDepths, depthView:state.depthView, guides:state.guides
     };
   }
   function autoSaveProject(){
@@ -1798,6 +1902,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
       state.objects=d.objects; state.params=d.params||state.params;
       state.layerMM=d.layerMM||{}; state.hiddenDepths=d.hiddenDepths||[];
       state.depthView=d.depthView!==undefined?d.depthView:true;
+      state.guides=d.guides&&Array.isArray(d.guides.v)&&Array.isArray(d.guides.h)?d.guides:{v:[],h:[]};
     }catch(e){}
   }
   function applyProjectData(d){
@@ -1807,6 +1912,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     state.layerMM=d.layerMM||{};
     state.hiddenDepths=d.hiddenDepths||[];
     state.depthView=d.depthView!==undefined?d.depthView:true;
+    state.guides=d.guides&&Array.isArray(d.guides.v)&&Array.isArray(d.guides.h)?d.guides:{v:[],h:[]};
     state.selectedIds=[]; state.history=[]; state.hIndex=-1;
     docWInput.value=state.docW; docHInput.value=state.docH;
     depthViewBtn.classList.toggle('active',state.depthView);
