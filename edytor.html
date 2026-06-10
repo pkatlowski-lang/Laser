@@ -287,7 +287,8 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       <button class="tbtn" id="zoomOut" title="Pomniejsz"><span class="ico">−</span></button>
       <span class="zoomval" id="zoomVal">100%</span>
       <button class="tbtn" id="zoomIn" title="Powiększ"><span class="ico">+</span></button>
-      <button class="tbtn" id="zoomFit" title="Dopasuj">Dopasuj</button>
+      <button class="tbtn" id="zoomFit" title="Dopasuj cały arkusz do widoku">Dopasuj</button>
+      <button class="tbtn" id="zoomSelBtn" title="Przybliż do zaznaczenia (klawisz 2)">⌖ Zaznaczenie</button>
     </div>
     <div class="tgroup">
       <button class="tbtn" id="snapBtn" title="Przyciągaj do siatki">⊞ Siatka</button>
@@ -474,6 +475,8 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
         <h4>Widok</h4>
         <div class="sc-row"><span>Powiększ / pomniejsz</span><span class="sc-keys"><kbd>Scroll</kbd></span></div>
         <div class="sc-row"><span>Przesuń widok (tymczasowo)</span><span class="sc-keys"><kbd>Spacja</kbd>+przeciągnij</span></div>
+        <div class="sc-row"><span>Dopasuj cały arkusz</span><span class="sc-keys"><kbd>1</kbd></span></div>
+        <div class="sc-row"><span>Przybliż do zaznaczenia</span><span class="sc-keys"><kbd>2</kbd></span></div>
         <div class="sc-row"><span>Pokaż tę pomoc</span><span class="sc-keys"><kbd>?</kbd></span></div>
       </div>
       <div class="sc-group">
@@ -2014,6 +2017,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   document.getElementById('zoomIn').addEventListener('click',()=>zoomBy(0.83));
   document.getElementById('zoomOut').addEventListener('click',()=>zoomBy(1.2));
   document.getElementById('zoomFit').addEventListener('click',zoomFit);
+  document.getElementById('zoomSelBtn').addEventListener('click',zoomToSelection);
   const snapBtn=document.getElementById('snapBtn');
   snapBtn.classList.toggle('active',state.snap);
   snapBtn.addEventListener('click',()=>{ state.snap=!state.snap; snapBtn.classList.toggle('active',state.snap); });
@@ -2154,6 +2158,19 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     state.view={ x:-m-(vw-dw)/2, y:-m-(vh-dh)/2, w:vw, h:vh };
     applyView(); renderOverlay();
   }
+  // przybliż widok tak, by mieściło całe zaznaczenie (z marginesem); brak zaznaczenia -> jak "Dopasuj"
+  function zoomToSelection(){
+    const sel=getSelected(); if(!sel.length){ zoomFit(); return; }
+    let minx=Infinity,miny=Infinity,maxx=-Infinity,maxy=-Infinity;
+    sel.forEach(o=>{ const bb=rotatedBBox(o); minx=Math.min(minx,bb.minx); miny=Math.min(miny,bb.miny); maxx=Math.max(maxx,bb.maxx); maxy=Math.max(maxy,bb.maxy); });
+    const r=canvasRect(); const aspect=(r.width&&r.height)? r.width/r.height : state.view.w/state.view.h;
+    const m=Math.max(4, (maxx-minx)*0.12, (maxy-miny)*0.12);
+    const dw=Math.max(1,maxx-minx)+2*m, dh=Math.max(1,maxy-miny)+2*m;
+    let vw=Math.max(dw, dh*aspect), vh=vw/aspect;
+    const cx=(minx+maxx)/2, cy=(miny+maxy)/2;
+    state.view={ x:cx-vw/2, y:cy-vh/2, w:vw, h:vh };
+    applyView(); renderOverlay();
+  }
 
   canvas.addEventListener('dblclick', e=>{
     if(state.tool==='pen' && state.penDraft){ penFinish(); return; }
@@ -2199,6 +2216,8 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='v'){ if(!typing){ e.preventDefault(); pasteClipboard(); } return; }
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='a'){ if(!typing){ e.preventDefault(); state.selectedIds=expandGroupSelection(state.objects.filter(o=>!o.locked).map(o=>o.id)); renderOverlay(); renderLayers(); renderProps(); } return; }
     if(typing) return;
+    if(e.key==='1'){ e.preventDefault(); zoomFit(); return; }
+    if(e.key==='2'){ e.preventDefault(); zoomToSelection(); return; }
     if(e.key==='Delete'||e.key==='Backspace'){ e.preventDefault(); deleteSel(); return; }
     const selArr=getSelected();
     if(selArr.length && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){
