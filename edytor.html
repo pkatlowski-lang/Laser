@@ -143,6 +143,16 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 .frame-ctrl{display:flex;gap:6px;align-items:center}
 .frame-ctrl input[type=number]{width:68px;flex:0 0 68px}
 
+/* ---- Menu kontekstowe (PPM na płótnie) ---- */
+.ctx-menu{display:none;position:fixed;z-index:3000;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:5px;min-width:208px;box-shadow:0 10px 30px rgba(0,0,0,.5);font-size:.82rem}
+.ctx-menu.open{display:block}
+.ctx-menu button{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;padding:7px 10px;background:none;border:none;color:var(--text);text-align:left;border-radius:6px;cursor:pointer;font:inherit}
+.ctx-menu button:hover:not(:disabled){background:var(--accent);color:#1a1308}
+.ctx-menu button:hover:not(:disabled) .ctx-key{color:#1a1308;opacity:.7}
+.ctx-menu button:disabled{opacity:.4;cursor:not-allowed}
+.ctx-menu .ctx-key{font-size:.7rem;color:var(--muted)}
+.ctx-menu hr{border:none;border-top:1px solid var(--border);margin:4px 2px}
+
 /* ---- 3D export modal ---- */
 .modal-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:2000;align-items:flex-start;justify-content:center;padding-top:50px;overflow-y:auto}
 .modal-ov.open{display:flex}
@@ -346,6 +356,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     </div>
   </div>
 </div>
+
+<div class="ctx-menu" id="ctxMenu"></div>
 
 <div class="modal-ov" id="modal3dPrev">
   <div class="modal-box" style="max-width:860px">
@@ -1601,7 +1613,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
       return `<div class="layer ${state.selectedIds.includes(o.id)?'sel':''}" data-id="${o.id}">
         <span class="swatch ${sw}"></span>
         ${dbadge}
-        <span class="lname">${escapeXml(autoName(o))}</span>
+        <span class="lname" title="Kliknij dwukrotnie, aby zmienić nazwę">${escapeXml(autoName(o))}</span>
         <button class="lico" data-act="top" title="Na wierzch">⤒</button>
         <button class="lico" data-act="up" title="Wyżej">▲</button>
         <button class="lico" data-act="down" title="Niżej">▼</button>
@@ -1613,10 +1625,32 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     }).join('');
     layersEl.querySelectorAll('.layer').forEach(row=>{
       const id=row.getAttribute('data-id');
-      row.addEventListener('click',e=>{ if(e.target.closest('[data-act]')) return; select(id); });
+      row.addEventListener('click',e=>{ if(e.target.closest('[data-act]')||e.target.closest('.lname')) return; select(id); });
       row.querySelectorAll('[data-act]').forEach(btn=>btn.addEventListener('click',e=>{
         e.stopPropagation(); layerAction(id,btn.getAttribute('data-act'));
       }));
+      const lname=row.querySelector('.lname');
+      lname.addEventListener('click',()=>select(id));
+      lname.addEventListener('dblclick',e=>{
+        e.stopPropagation();
+        const o=state.objects.find(x=>x.id===id); if(!o) return;
+        const cur=autoName(o);
+        lname.innerHTML=`<input type="text" value="${escapeXml(cur)}" maxlength="40">`;
+        const inp=lname.querySelector('input');
+        inp.focus(); inp.select();
+        let done=false;
+        const finish=(save)=>{
+          if(done) return; done=true;
+          if(save){ const v=inp.value.trim(); o.name=v; pushHistory(); }
+          renderLayers();
+        };
+        inp.addEventListener('keydown',ke=>{
+          ke.stopPropagation();
+          if(ke.key==='Enter'){ finish(true); }
+          else if(ke.key==='Escape'){ finish(false); }
+        });
+        inp.addEventListener('blur',()=>finish(true));
+      });
     });
   }
   function layerAction(id,act){
@@ -1821,6 +1855,89 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     const map={v:'select',h:'pan',r:'rect',o:'ellipse',p:'polygon',s:'star',l:'line',n:'pen',t:'text'};
     if(map[e.key.toLowerCase()]){ if(state.penDraft) penCancel(); state.tool=map[e.key.toLowerCase()]; syncToolButtons(); }
   });
+
+  /* ---------------- Menu kontekstowe (PPM na płótnie) ---------------- */
+  function bringToFront(){
+    const ids=state.selectedIds.slice(); if(!ids.length) return;
+    const sel=state.objects.filter(o=>ids.includes(o.id)); if(!sel.length) return;
+    state.objects=state.objects.filter(o=>!ids.includes(o.id));
+    state.objects.push(...sel);
+    pushHistory(); renderAll(); renderProps();
+  }
+  function sendToBack(){
+    const ids=state.selectedIds.slice(); if(!ids.length) return;
+    const sel=state.objects.filter(o=>ids.includes(o.id)); if(!sel.length) return;
+    state.objects=state.objects.filter(o=>!ids.includes(o.id));
+    state.objects.unshift(...sel);
+    pushHistory(); renderAll(); renderProps();
+  }
+  const ctxMenu=document.getElementById('ctxMenu');
+  function closeCtxMenu(){ ctxMenu.classList.remove('open'); ctxMenu.innerHTML=''; }
+  function ctxItem(label,action,opts){ opts=opts||{};
+    return `<button type="button" data-ctx="${action}"${opts.disabled?' disabled':''}>${label}</button>`; }
+  function openCtxMenu(x,y,html){
+    ctxMenu.innerHTML=html; ctxMenu.classList.add('open');
+    const r=ctxMenu.getBoundingClientRect();
+    ctxMenu.style.left=Math.max(4,Math.min(x,window.innerWidth-r.width-6))+'px';
+    ctxMenu.style.top=Math.max(4,Math.min(y,window.innerHeight-r.height-6))+'px';
+  }
+  canvas.addEventListener('contextmenu', e=>{
+    e.preventDefault();
+    if(state.tool!=='select'){ closeCtxMenu(); return; }
+    const grp=e.target.closest && e.target.closest('[data-id]');
+    if(grp){ const id=grp.getAttribute('data-id'); if(!state.selectedIds.includes(id)) select(id); }
+    const sel=getSelected();
+    let h='';
+    if(sel.length){
+      const single=sel.length===1?sel[0]:null;
+      h+=ctxItem('⧉ Duplikuj <span class="ctx-key">Ctrl+D</span>','duplicate');
+      h+=ctxItem('⎘ Kopiuj <span class="ctx-key">Ctrl+C</span>','copy');
+      h+=ctxItem('🗑 Usuń <span class="ctx-key">Del</span>','delete');
+      h+='<hr>';
+      h+=ctxItem('⤒ Na wierzch','front');
+      h+=ctxItem('⤓ Na spód','back');
+      if(single&&(single.type==='path'||single.type==='text')){
+        h+='<hr>';
+        h+=ctxItem(`↔ Odbij poziomo${single.flipX?' ✓':''}`,'flipx');
+        h+=ctxItem(`↕ Odbij pionowo${single.flipY?' ✓':''}`,'flipy');
+      }
+      const gids=[...new Set(sel.map(o=>o.groupId).filter(Boolean))];
+      const isWholeGroup = gids.length===1 && sel.every(o=>o.groupId===gids[0]) && state.objects.filter(o=>o.groupId===gids[0]).length===sel.length;
+      if(isWholeGroup || sel.length>1){
+        h+='<hr>';
+        if(isWholeGroup) h+=ctxItem('⛓ Rozgrupuj <span class="ctx-key">Ctrl+Shift+G</span>','ungroup');
+        else h+=ctxItem('🔗 Grupuj <span class="ctx-key">Ctrl+G</span>','group');
+      }
+    } else {
+      h+=ctxItem('📋 Wklej <span class="ctx-key">Ctrl+V</span>','paste',{disabled:!clipboard.length});
+      h+=ctxItem('▦ Zaznacz wszystko <span class="ctx-key">Ctrl+A</span>','selectall',{disabled:!state.objects.length});
+      h+='<hr>';
+      h+=ctxItem('🔍 Dopasuj widok','zoomfit');
+    }
+    openCtxMenu(e.clientX,e.clientY,h);
+  });
+  ctxMenu.addEventListener('click',e=>{
+    const btn=e.target.closest('[data-ctx]'); if(!btn||btn.disabled) return;
+    const o=getSel();
+    switch(btn.getAttribute('data-ctx')){
+      case 'duplicate': duplicateSel(); break;
+      case 'copy': copySel(); break;
+      case 'paste': pasteClipboard(); break;
+      case 'delete': deleteSel(); break;
+      case 'front': bringToFront(); break;
+      case 'back': sendToBack(); break;
+      case 'group': groupSel(); break;
+      case 'ungroup': ungroupSel(); break;
+      case 'flipx': if(o){ o.flipX=!o.flipX; renderProps(); renderAll(); pushHistory(); scheduleLive3D(); } break;
+      case 'flipy': if(o){ o.flipY=!o.flipY; renderProps(); renderAll(); pushHistory(); scheduleLive3D(); } break;
+      case 'selectall': state.selectedIds=expandGroupSelection(state.objects.filter(x=>!x.locked).map(x=>x.id)); renderOverlay(); renderLayers(); renderProps(); break;
+      case 'zoomfit': zoomFit(); break;
+    }
+    closeCtxMenu();
+  });
+  window.addEventListener('pointerdown',e=>{ if(ctxMenu.classList.contains('open') && !ctxMenu.contains(e.target)) closeCtxMenu(); });
+  window.addEventListener('scroll',closeCtxMenu,true);
+  window.addEventListener('resize',closeCtxMenu);
 
   /* ---------------- Text frame (Obramowanie tekstu) ---------------- */
   function addTextFrame(){
