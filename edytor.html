@@ -38,10 +38,23 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 .panel.left{border-right:1px solid var(--border)}
 .panel.right{border-left:1px solid var(--border)}
 .panel h2{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:14px 16px 8px;font-weight:700}
-.stage{flex:1;position:relative;min-width:0;background:
+.stage{flex:1;position:relative;min-width:0;min-height:260px;background:
   repeating-linear-gradient(45deg,#0f0b06 0 10px,#120d07 10px 20px)}
 #canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
 .stage .hint-empty{position:absolute;left:50%;top:14px;transform:translateX(-50%);font-size:.8rem;color:var(--muted);background:rgba(0,0,0,.35);padding:6px 12px;border-radius:100px;pointer-events:none}
+
+/* ---- Pływający pasek edycji tekstu (góra obszaru roboczego) ---- */
+.text-toolbar{display:none;position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:10;
+  align-items:center;gap:6px;background:var(--surface);border:1.5px solid var(--border);border-radius:10px;
+  padding:6px 10px;box-shadow:0 6px 20px rgba(0,0,0,.4);max-width:96%;flex-wrap:wrap}
+.text-toolbar.show{display:flex}
+.text-toolbar select,.text-toolbar input[type=number]{background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:inherit;font-size:.78rem;padding:5px 6px}
+.text-toolbar select{max-width:150px}
+.text-toolbar input[type=number]{width:58px}
+.text-toolbar label{font-size:.7rem;color:var(--muted);font-weight:600;text-transform:uppercase}
+.text-toolbar .tbtn{height:30px;min-width:30px;padding:0 9px}
+.text-toolbar .tbtn.active{background:var(--accent);border-color:var(--accent);color:#1a1308}
+.tt-sep{width:1px;height:22px;background:var(--border)}
 
 /* canvas geometry styling */
 .doc-bg{fill:#e8d9b8}
@@ -157,12 +170,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 .p3d-controls input[type=range]{width:120px;accent-color:var(--accent)}
 .p3d-controls b{color:var(--text);min-width:22px;display:inline-block}
 
-/* ---- Bottom dock (stały podgląd 3D + plik SVG) ---- */
-.bottombar{flex:0 0 248px;display:flex;gap:1px;background:var(--border);border-top:2px solid var(--accent-dark);position:relative;transition:flex-basis .18s}
-.bottombar.collapsed{flex-basis:30px}
-.bottombar.collapsed .bb-sec{display:none}
-.bb-tab{position:absolute;top:-22px;right:16px;height:22px;padding:0 14px;border:1px solid var(--border);border-bottom:none;background:var(--surface);color:var(--accent);font-size:.7rem;font-weight:700;cursor:pointer;border-radius:7px 7px 0 0;z-index:3}
-.bb-sec{flex:1;background:var(--surface);display:flex;flex-direction:column;min-width:0}
+/* ---- SVG split preview modal ---- */
+.svgprev-wrap{margin:12px 0;overflow:auto;background:#0e0e16;border-radius:12px;padding:16px;display:flex;align-items:center;justify-content:center;max-height:68vh}
+.svgprev-wrap svg{max-width:100%;background:#fff;border-radius:4px}
+.svgprev-wrap .bb-empty{color:#666;font-size:.8rem}
+
+/* ---- Bottom dock (stały podgląd 3D + plik SVG, zawsze widoczny) ---- */
+.bottombar{flex:0 0 248px;min-height:0;display:flex;gap:1px;background:var(--border);border-top:2px solid var(--accent-dark);position:relative}
+.bb-sec{flex:1;background:var(--surface);display:flex;flex-direction:column;min-width:0;min-height:0}
 .bb-head{display:flex;align-items:center;gap:8px;padding:7px 12px;font-size:.74rem;font-weight:700;color:var(--text);border-bottom:1px solid var(--border)}
 .bb-spacer{flex:1}
 .bb-btn{border:1.5px solid var(--border);background:var(--surface2);color:var(--text);font-size:.72rem;font-weight:600;padding:4px 10px;border-radius:6px;cursor:pointer}
@@ -267,6 +282,18 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     </aside>
 
     <section class="stage">
+      <div class="text-toolbar" id="textToolbar">
+        <select id="ttFont" title="Czcionka"></select>
+        <input type="number" id="ttSize" min="4" max="400" step="1" title="Wielkość czcionki (mm)">
+        <span class="tt-sep"></span>
+        <button type="button" class="tbtn" id="ttBold" title="Pogrubienie"><b>B</b></button>
+        <button type="button" class="tbtn" id="ttItalic" title="Kursywa"><i>I</i></button>
+        <button type="button" class="tbtn" id="ttUnderline" title="Podkreślenie"><u>U</u></button>
+        <span class="tt-sep"></span>
+        <label>Szer.</label><input type="number" id="ttW" min="1" step="1" title="Szerokość napisu (mm) — rozciąganie">
+        <label>Wys.</label><input type="number" id="ttH" min="1" step="1" title="Wysokość napisu (mm) — rozciąganie">
+        <button type="button" class="tbtn" id="ttReset" title="Przywróć proporcje 1:1">↺</button>
+      </div>
       <svg id="canvas" xmlns="http://www.w3.org/2000/svg"></svg>
       <div class="hint-empty" id="hintEmpty">Wybierz narzędzie i narysuj kształt na płycie — albo kliknij szablon po lewej</div>
     </section>
@@ -278,7 +305,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
   </div>
 
   <div class="bottombar" id="bottombar">
-    <button class="bb-tab" id="bbTab" title="Pokaż / ukryj dolny podgląd">▾ podgląd</button>
     <div class="bb-sec">
       <div class="bb-head"><span>🧊 Wizualizacja 3D — stos warstw materiału</span>
         <span class="bb-spacer"></span>
@@ -289,6 +315,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     <div class="bb-sec">
       <div class="bb-head"><span>📄 Plik SVG — warstwy rozdzielone (1 plik)</span>
         <span class="bb-spacer"></span>
+        <button class="bb-btn" id="bbSvgExpand" title="Powiększ podgląd SVG">⛶ Powiększ</button>
         <button class="bb-btn" id="bbDownload" title="Pobierz rozdzielony plik SVG">⬇ Pobierz SVG warstw</button>
       </div>
       <div class="bb-svg" id="bbSvg"></div>
@@ -305,6 +332,18 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
       <div class="preview3d-scene" id="p3dScene"></div>
     </div>
     <p style="font-size:.72rem;color:var(--muted);text-align:center;margin-top:8px">Przeciągnij aby obrócić · kółko myszy = zmień perspektywę · każdy kolor = osobna warstwa materiału</p>
+  </div>
+</div>
+
+<div class="modal-ov" id="modalSvgPrev">
+  <div class="modal-box" style="max-width:1100px">
+    <button class="modal-close" id="modalSvgPrevClose" title="Zamknij">✕</button>
+    <h3>📄 Podgląd SVG — warstwy rozdzielone (1 plik)</h3>
+    <p style="font-size:.8rem;color:var(--muted);margin:0">Każda warstwa ma osobną kolumnę — wspólne elementy są scalone w jeden obrys gotowy do wycięcia.</p>
+    <div class="svgprev-wrap" id="svgPrevWrap"></div>
+    <div class="field" style="padding:14px 0 0;display:flex;justify-content:flex-end">
+      <button type="button" class="tbtn" id="svgPrevDownload" style="background:linear-gradient(135deg,var(--accent),var(--accent-dark));border-color:var(--accent);color:#1a1308">⬇ Pobierz SVG warstw</button>
+    </div>
   </div>
 </div>
 
@@ -466,9 +505,19 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     if(o.type==='text'){
       const fs=o.fontSize||24;
       const yBase=o.y + fs*0.34; // o.y stored as vertical center for text
-      const cls = _silFill?` style="fill:${_silFill}"` : (forExport?'' : (state.depthView?` style="fill:${depthColor(o.depth||1)}"` : (o.mode==='engrave'?' class="geo-engrave-txt"':o.mode==='score'?' class="geo-score-txt"':' class="geo-cut-txt"')));
-      const style = (!_silFill && forExport) ? exportTextStyle(o) : '';
-      geo=`<text x="${fmt(o.x)}" y="${fmt(yBase)}" text-anchor="middle" font-family='${o.font}' font-size="${fmt(fs)}"${cls}${style}>${escapeXml(o.text||'')}</text>`;
+      const deco=`${o.bold?'font-weight:700;':''}${o.italic?'font-style:italic;':''}${o.underline?'text-decoration:underline;':''}`;
+      let cls='', styleCss='';
+      if(_silFill) styleCss=`fill:${_silFill};`;
+      else if(forExport) styleCss=exportTextStyle(o);
+      else if(state.depthView) styleCss=`fill:${depthColor(o.depth||1)};`;
+      else cls=o.mode==='engrave'?'geo-engrave-txt':o.mode==='score'?'geo-score-txt':'geo-cut-txt';
+      styleCss+=deco;
+      const clsAttr=cls?` class="${cls}"`:'';
+      const styleAttr=styleCss?` style="${styleCss}"`:'';
+      let txt=`<text x="${fmt(o.x)}" y="${fmt(yBase)}" text-anchor="middle" font-family='${o.font}' font-size="${fmt(fs)}"${clsAttr}${styleAttr}>${escapeXml(o.text||'')}</text>`;
+      const tsx=o.tsx||1, tsy=o.tsy||1;
+      if(tsx!==1||tsy!==1) txt=`<g transform="translate(${fmt(o.x)} ${fmt(yBase)}) scale(${fmt(tsx)} ${fmt(tsy)}) translate(${fmt(-o.x)} ${fmt(-yBase)})">${txt}</g>`;
+      geo=txt;
     } else {
       const d=shapeD(o);
       if(_silFill){ geo=`<path d="${d}" fill="${_silFill}" stroke="none"/>`; }
@@ -484,9 +533,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     return ` fill="none" stroke="${COLORS.cut}" stroke-width="0.12"`;
   }
   function exportTextStyle(o){
-    if(o.mode==='engrave') return ` fill="${COLORS.engrave}" stroke="none"`;
-    if(o.mode==='score') return ` fill="none" stroke="${COLORS.score}" stroke-width="0.12"`;
-    return ` fill="none" stroke="${COLORS.cut}" stroke-width="0.12"`;
+    if(o.mode==='engrave') return `fill:${COLORS.engrave};stroke:none;`;
+    if(o.mode==='score') return `fill:none;stroke:${COLORS.score};stroke-width:0.12px;stroke-dasharray:1.2 0.9;`;
+    return `fill:none;stroke:${COLORS.cut};stroke-width:0.12px;`;
   }
   function objMarkup(o, forExport){
     const inner=innerGeometry(o, forExport);
@@ -540,10 +589,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
       return {x:(o.x||0)+cx-w/2, y:(o.y||0)+cy-h/2, w, h};
     }
     if(o.type==='text'){
+      const fs=o.fontSize||24, tsx=o.tsx||1, tsy=o.tsy||1, ax=o.x, ay=o.y+fs*0.34;
       const el=gObjects.querySelector(`[data-id="${o.id}"] text`);
-      if(el){ try{ const b=el.getBBox(); return {x:b.x,y:b.y,w:b.width,h:b.height}; }catch(e){} }
-      const fs=o.fontSize||24, w=(o.text||'').length*fs*0.55||fs;
-      return {x:o.x-w/2,y:o.y-fs*0.5,w:w,h:fs};
+      if(el){ try{ const b=el.getBBox();
+        return {x:ax+(b.x-ax)*tsx, y:ay+(b.y-ay)*tsy, w:b.width*tsx, h:b.height*tsy}; }catch(e){} }
+      const w=((o.text||'').length*fs*0.55||fs)*tsx;
+      return {x:o.x-w/2,y:o.y-fs*0.5*tsy,w:w,h:fs*tsy};
     }
     return {x:o.x,y:o.y,w:o.w,h:o.h};
   }
@@ -1166,6 +1217,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     propsEl.querySelectorAll('[data-seg="mmode"] button').forEach(b=>b.addEventListener('click',()=>{ const m=b.dataset.mode; getSelected().forEach(o=>o.mode=m); renderObjects(); renderLayers(); pushHistory(); }));
   }
   function renderProps(){
+    updateTextToolbar();
     const selArr=getSelected();
     if(selArr.length>1){ renderMultiProps(selArr); return; }
     const o=getSel();
@@ -1201,7 +1253,16 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     if(o.type==='text'){
       h+=`<div class="field"><label>Treść napisu</label><input type="text" data-prop="text" value="${escapeXml(o.text||'')}" maxlength="80"></div>`;
       h+=`<div class="field"><label>Czcionka</label><select data-prop="font">${availableFonts().map(([v,l])=>`<option value='${escapeXml(v)}' ${v===o.font?'selected':''}>${escapeXml(l)}${localFonts.some(f=>f[0]===v)?' • PC':''}</option>`).join('')}</select></div>`;
+      h+=`<div class="field"><label>Styl</label><div class="seg" data-seg="textstyle">
+        <button class="${o.bold?'on':''}" data-tstyle="bold" style="font-weight:700">B</button>
+        <button class="${o.italic?'on':''}" data-tstyle="italic" style="font-style:italic">I</button>
+        <button class="${o.underline?'on':''}" data-tstyle="underline" style="text-decoration:underline">U</button>
+      </div></div>`;
       h+=rangeField('Wielkość (mm)','fontSize',o.fontSize||24,4,160,1,o);
+      const tbb=objBBox(o);
+      h+=`<div class="field"><label>Szerokość napisu (mm)</label><input type="number" id="textW" value="${fmt(tbb.w)}" min="1" step="1"></div>`;
+      h+=`<div class="field"><label>Wysokość napisu (mm)</label><input type="number" id="textH" value="${fmt(tbb.h)}" min="1" step="1"></div>`;
+      h+=`<div class="field"><button type="button" id="textReset" class="tbtn" style="width:100%;justify-content:center">↺ Przywróć proporcje 1:1</button></div>`;
     }
     // repeat modifier
     const r=o.repeat||{type:'none'};
@@ -1336,6 +1397,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     if(pathH) pathH.addEventListener('change',()=>{ applyPathSize(); pushHistory(); scheduleLive3D(); });
     const pathReset=propsEl.querySelector('#pathReset');
     if(pathReset) pathReset.addEventListener('click',()=>{ const ob=getSel(); if(ob&&ob.type==='path'){ ob.sx=1; ob.sy=1; renderAll(); renderProps(); pushHistory(); } });
+    propsEl.querySelectorAll('[data-seg="textstyle"] button').forEach(b=>b.addEventListener('click',()=>{
+      const k=b.getAttribute('data-tstyle'); o[k]=!o[k]; renderProps(); renderObjects(); renderOverlay(); pushHistory(); updateTextToolbar();
+    }));
+    const textW=propsEl.querySelector('#textW'), textH=propsEl.querySelector('#textH');
+    if(textW) textW.addEventListener('change',()=>{ applyTextSize(textW,textH); pushHistory(); scheduleLive3D(); });
+    if(textH) textH.addEventListener('change',()=>{ applyTextSize(textW,textH); pushHistory(); scheduleLive3D(); });
+    const textReset=propsEl.querySelector('#textReset');
+    if(textReset) textReset.addEventListener('click',()=>{ const ob=getSel(); if(ob&&ob.type==='text'){ ob.tsx=1; ob.tsy=1; renderAll(); renderProps(); pushHistory(); updateTextToolbar(); } });
     const frameBtn=propsEl.querySelector('#frameAddBtn');
     if(frameBtn) frameBtn.addEventListener('click',()=>addTextFrame());
     const ddBtn=propsEl.querySelector('#depthDown'), duBtn=propsEl.querySelector('#depthUp');
@@ -1348,6 +1417,41 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
       renderAll(); renderProps(); pushHistory();
     }));
   }
+  /* ---- Pełna edycja napisów: rozciąganie (tsx/tsy) + pasek u góry obszaru roboczego ---- */
+  function applyTextSize(wInp,hInp){
+    const ob=getSel(); if(!ob||ob.type!=='text') return;
+    const tsx=ob.tsx||1, tsy=ob.tsy||1;
+    const bb=objBBox(ob);
+    const baseW=(bb.w/tsx)||1, baseH=(bb.h/tsy)||1;
+    const nw=Math.max(1,Number(wInp.value)||1), nh=Math.max(1,Number(hInp.value)||1);
+    ob.tsx=nw/baseW; ob.tsy=nh/baseH;
+    renderObjects(); renderOverlay();
+  }
+  const textToolbar=document.getElementById('textToolbar');
+  const ttFont=document.getElementById('ttFont'), ttSize=document.getElementById('ttSize'),
+        ttBold=document.getElementById('ttBold'), ttItalic=document.getElementById('ttItalic'), ttUnderline=document.getElementById('ttUnderline'),
+        ttW=document.getElementById('ttW'), ttH=document.getElementById('ttH'), ttReset=document.getElementById('ttReset');
+  function updateTextToolbar(){
+    const o=getSel();
+    if(!o||o.type!=='text'){ textToolbar.classList.remove('show'); return; }
+    textToolbar.classList.add('show');
+    ttFont.innerHTML=availableFonts().map(([v,l])=>`<option value='${escapeXml(v)}' ${v===o.font?'selected':''}>${escapeXml(l)}${localFonts.some(f=>f[0]===v)?' • PC':''}</option>`).join('');
+    if(document.activeElement!==ttSize) ttSize.value=fmt(o.fontSize||24);
+    ttBold.classList.toggle('active',!!o.bold);
+    ttItalic.classList.toggle('active',!!o.italic);
+    ttUnderline.classList.toggle('active',!!o.underline);
+    const bb=objBBox(o);
+    if(document.activeElement!==ttW) ttW.value=fmt(bb.w);
+    if(document.activeElement!==ttH) ttH.value=fmt(bb.h);
+  }
+  ttFont.addEventListener('change',()=>{ const o=getSel(); if(!o||o.type!=='text') return; o.font=ttFont.value; renderObjects(); renderOverlay(); renderProps(); pushHistory(); scheduleLive3D(); });
+  ttSize.addEventListener('change',()=>{ const o=getSel(); if(!o||o.type!=='text') return; o.fontSize=clamp(Number(ttSize.value)||24,4,400); renderObjects(); renderOverlay(); renderProps(); pushHistory(); scheduleLive3D(); });
+  [[ttBold,'bold'],[ttItalic,'italic'],[ttUnderline,'underline']].forEach(([btn,key])=>{
+    btn.addEventListener('click',()=>{ const o=getSel(); if(!o||o.type!=='text') return; o[key]=!o[key]; renderObjects(); renderOverlay(); renderProps(); pushHistory(); scheduleLive3D(); });
+  });
+  ttW.addEventListener('change',()=>{ applyTextSize(ttW,ttH); renderProps(); pushHistory(); scheduleLive3D(); });
+  ttH.addEventListener('change',()=>{ applyTextSize(ttW,ttH); renderProps(); pushHistory(); scheduleLive3D(); });
+  ttReset.addEventListener('click',()=>{ const o=getSel(); if(!o||o.type!=='text') return; o.tsx=1; o.tsy=1; renderAll(); renderProps(); pushHistory(); });
   function normalizeRepeat(type,old){
     if(type==='none') return {type:'none'};
     if(type==='linear') return {type,count:old.count||3,dx:old.dx??30,dy:old.dy??0};
@@ -1751,13 +1855,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 
   /* ----- Bottom dock: live 3D + live SVG split ----- */
   let liveRot={x:60,z:-28}, liveDrag=null, live3dRAF=null;
-  const bottombar=document.getElementById('bottombar');
   const live3dStage=document.getElementById('live3dStage');
   const live3dScene=document.getElementById('live3dScene');
   const bbSvgEl=document.getElementById('bbSvg');
   function applyLiveRot(){ live3dScene.style.transform=`rotateX(${liveRot.x}deg) rotateZ(${liveRot.z}deg)`; }
   function updateLive3D(){
-    if(bottombar.classList.contains('collapsed')) return;
     const W=state.docW,H=state.docH;
     const sh=live3dStage.clientHeight||200;
     let sw=Math.round(W/H*(sh*0.62)); sw=Math.max(120,Math.min(sw, (live3dStage.clientWidth||300)*0.75));
@@ -1773,7 +1875,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
   let svgSplitTimer=null;
   function scheduleSvgSplit(){ clearTimeout(svgSplitTimer); svgSplitTimer=setTimeout(updateSvgSplit, 280); }
   function updateSvgSplit(){
-    if(bottombar.classList.contains('collapsed')) return;
     let r=null; try{ r=buildSeparatedSVG(); }catch(e){ console.warn('SVG split error',e); }
     bbSvgEl.innerHTML = r ? r.svg : '<div class="bb-empty">Dodaj elementy — tu pojawi się plik z rozdzielonymi warstwami</div>';
   }
@@ -1782,13 +1883,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
   live3dStage.addEventListener('pointermove',e=>{ if(!liveDrag) return; const dx=e.clientX-liveDrag.sx, dy=e.clientY-liveDrag.sy;
     liveRot.x=Math.max(5,Math.min(88,liveDrag.rx-dy*0.4)); liveRot.z=liveDrag.rz+dx*0.4; applyLiveRot(); });
   live3dStage.addEventListener('pointerup',()=>{ liveDrag=null; live3dStage.classList.remove('l3d-dragging'); });
-  document.getElementById('bbTab').addEventListener('click',()=>{
-    bottombar.classList.toggle('collapsed');
-    document.getElementById('bbTab').textContent=bottombar.classList.contains('collapsed')?'▴ podgląd':'▾ podgląd';
-    if(!bottombar.classList.contains('collapsed')){ syncViewAspect(); applyView(); updateLive3D(); }
-  });
   document.getElementById('live3dExpand').addEventListener('click',showPreview3D);
   document.getElementById('bbDownload').addEventListener('click',downloadSeparatedSVG);
+  document.getElementById('bbSvgExpand').addEventListener('click',showSvgPreview);
 
   /* ----- Big modal preview ----- */
   let p3dRot={x:54,z:-24}, p3dDrag=null;
@@ -1817,6 +1914,16 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
   document.getElementById('loadFontsBtn').addEventListener('click',loadLocalFonts);
   document.getElementById('modal3dPrevClose').addEventListener('click',()=>document.getElementById('modal3dPrev').classList.remove('open'));
   document.getElementById('modal3dPrev').addEventListener('click',e=>{ if(e.target===document.getElementById('modal3dPrev')) document.getElementById('modal3dPrev').classList.remove('open'); });
+
+  /* ----- Powiększony podgląd rozdzielonego SVG ----- */
+  function showSvgPreview(){
+    let r=null; try{ r=buildSeparatedSVG(); }catch(e){ console.warn('SVG split error',e); }
+    document.getElementById('svgPrevWrap').innerHTML = r ? r.svg : '<div class="bb-empty">Brak elementów do podglądu.</div>';
+    document.getElementById('modalSvgPrev').classList.add('open');
+  }
+  document.getElementById('svgPrevDownload').addEventListener('click',downloadSeparatedSVG);
+  document.getElementById('modalSvgPrevClose').addEventListener('click',()=>document.getElementById('modalSvgPrev').classList.remove('open'));
+  document.getElementById('modalSvgPrev').addEventListener('click',e=>{ if(e.target===document.getElementById('modalSvgPrev')) document.getElementById('modalSvgPrev').classList.remove('open'); });
 
   /* ---------------- Łączenie warstw (union) + rozdzielony plik SVG ----------------
      Dla każdej warstwy bierzemy wszystkie kształty CIĘCIA na warstwach >= dep
@@ -1867,13 +1974,18 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     let groups='';
     depths.forEach((dep,i)=>{
       const ox=i*(W+gap), col=depthColor(dep);
-      const cutObjs=vis.filter(o=>(o.depth||1)>=dep && o.mode!=='engrave');
+      // kształty (nie-tekstowe) na warstwach >= dep łączymy w jeden obrys (model podpierający)
+      const cutObjs=vis.filter(o=>o.type!=='text' && (o.depth||1)>=dep && o.mode!=='engrave');
       const rings=mergeLayerRings(cutObjs);
       const cutPaths=rings.map(r=>`<path d="${polyToPathD(r)}" fill="none" stroke="${COLORS.cut}" stroke-width="0.3"/>`).join('');
+      // napisy (cięcie/nacięcie) nie da się scalić w jeden obrys (brak danych konturu czcionki) —
+      // rysujemy je jako osobne <text> z konturem, na każdej warstwie którą podpierają
+      const cutTexts=vis.filter(o=>o.type==='text' && (o.depth||1)>=dep && o.mode!=='engrave').map(o=>objMarkup(o,true)).join('');
+      // dekoracje (grawer) rysujemy tylko na ich własnej warstwie
       const deco=vis.filter(o=>(o.depth||1)===dep && o.mode==='engrave').map(o=>objMarkup(o,true)).join('');
       groups+=`<g class="warstwa-${dep}" data-warstwa="${dep}" transform="translate(${fmt(ox)} ${labelH})">`+
         `<text x="${fmt(W/2)}" y="-3" font-size="6" text-anchor="middle" fill="${col}" font-family="sans-serif">Warstwa ${dep} · ${fmt(layerMM(dep))} mm</text>`+
-        cutPaths+deco+`</g>`;
+        cutPaths+cutTexts+deco+`</g>`;
     });
     const svg=`<svg xmlns="${SVG_NS}" viewBox="0 0 ${fmt(totalW)} ${fmt(H+labelH)}" width="${fmt(totalW)}mm" height="${fmt(H+labelH)}mm">${groups}</svg>`;
     return {svg, w:totalW, h:H+labelH};
