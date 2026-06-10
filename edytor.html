@@ -100,6 +100,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 .field .row2{display:flex;gap:8px}
 .field input[type=number],.field input[type=text],.field select{width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:inherit;font-size:.85rem}
 .field input:focus,.field select:focus{outline:none;border-color:var(--accent)}
+.field .check-label{display:flex;align-items:center;gap:6px;font-size:.78rem;font-weight:500;text-transform:none;letter-spacing:normal;color:var(--text);white-space:nowrap}
+.field .check-label input[type=checkbox]{width:auto;accent-color:var(--accent)}
 .range-wrap{display:flex;align-items:center;gap:10px}
 .range-wrap input[type=range]{flex:1;accent-color:var(--accent)}
 .range-val{font-weight:700;color:var(--accent);min-width:40px;text-align:right;font-size:.82rem}
@@ -313,6 +315,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
           <option value="420x297">A3 — 420 × 297 mm</option>
         </select>
       </div>
+      <div class="field">
+        <label>Siatka (mm)</label>
+        <div class="row2">
+          <input type="number" id="gridSizeInput" min="0.5" max="500" step="0.5" title="Odstęp linii siatki (mm)">
+          <label class="check-label"><input type="checkbox" id="gridShowInput"> Pokaż siatkę</label>
+        </div>
+      </div>
       <h2>Parametry globalne</h2>
       <div class="params" id="params"></div>
       <button type="button" class="tbtn addparam" id="addParamBtn">+ Dodaj parametr</button>
@@ -455,7 +464,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     objects:[],
     selectedIds:[],
     tool:'select',
-    snap:true, grid:10,
+    snap:true, grid:10, showGrid:true,
     penDraft:null, penPreview:null, guideLines:null,
     guides:{v:[],h:[]},
     view:{x:-20,y:-20,w:340,h:240},
@@ -691,8 +700,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
   function renderGrid(){
     const W=state.docW, H=state.docH, g=state.grid;
     let s=`<rect class="doc-bg" x="0" y="0" width="${W}" height="${H}"/>`;
-    for(let x=0;x<=W+0.01;x+=g) s+=`<line class="grid-line ${x%50===0?'major':''}" x1="${x}" y1="0" x2="${x}" y2="${H}"/>`;
-    for(let y=0;y<=H+0.01;y+=g) s+=`<line class="grid-line ${y%50===0?'major':''}" x1="0" y1="${y}" x2="${W}" y2="${y}"/>`;
+    if(state.showGrid&&g>0){
+      for(let x=0;x<=W+0.01;x+=g) s+=`<line class="grid-line ${x%50===0?'major':''}" x1="${x}" y1="0" x2="${x}" y2="${H}"/>`;
+      for(let y=0;y<=H+0.01;y+=g) s+=`<line class="grid-line ${y%50===0?'major':''}" x1="0" y1="${y}" x2="${W}" y2="${y}"/>`;
+    }
     s+=`<rect class="doc-border" x="0" y="0" width="${W}" height="${H}"/>`;
     gGrid.innerHTML=s;
   }
@@ -1863,6 +1874,18 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
   snapBtn.addEventListener('click',()=>{ state.snap=!state.snap; snapBtn.classList.toggle('active',state.snap); });
   document.getElementById('exportBtn').addEventListener('click',exportSVG);
 
+  /* ---------------- Ustawienia siatki ---------------- */
+  const gridSizeInput=document.getElementById('gridSizeInput'), gridShowInput=document.getElementById('gridShowInput');
+  gridSizeInput.value=state.grid; gridShowInput.checked=state.showGrid;
+  gridSizeInput.addEventListener('change',()=>{
+    state.grid=clamp(Number(gridSizeInput.value)||10,0.5,500);
+    gridSizeInput.value=state.grid;
+    renderGrid(); autoSaveProject();
+  });
+  gridShowInput.addEventListener('change',()=>{
+    state.showGrid=gridShowInput.checked; renderGrid(); autoSaveProject();
+  });
+
   /* ---------------- Rozmiar arkusza roboczego ---------------- */
   const docWInput=document.getElementById('docWInput'), docHInput=document.getElementById('docHInput'), docPreset=document.getElementById('docPreset');
   function applyDocSize(w,h){
@@ -1886,7 +1909,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     return {
       version:1, docW:state.docW, docH:state.docH,
       objects:state.objects, params:state.params, layerMM:state.layerMM,
-      hiddenDepths:state.hiddenDepths, depthView:state.depthView, guides:state.guides
+      hiddenDepths:state.hiddenDepths, depthView:state.depthView, guides:state.guides,
+      grid:state.grid, showGrid:state.showGrid
     };
   }
   function autoSaveProject(){
@@ -1903,6 +1927,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
       state.layerMM=d.layerMM||{}; state.hiddenDepths=d.hiddenDepths||[];
       state.depthView=d.depthView!==undefined?d.depthView:true;
       state.guides=d.guides&&Array.isArray(d.guides.v)&&Array.isArray(d.guides.h)?d.guides:{v:[],h:[]};
+      state.grid=d.grid>0?d.grid:state.grid;
+      state.showGrid=d.showGrid!==undefined?d.showGrid:true;
+      gridSizeInput.value=state.grid; gridShowInput.checked=state.showGrid;
     }catch(e){}
   }
   function applyProjectData(d){
@@ -1913,6 +1940,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
     state.hiddenDepths=d.hiddenDepths||[];
     state.depthView=d.depthView!==undefined?d.depthView:true;
     state.guides=d.guides&&Array.isArray(d.guides.v)&&Array.isArray(d.guides.h)?d.guides:{v:[],h:[]};
+    state.grid=d.grid>0?d.grid:10;
+    state.showGrid=d.showGrid!==undefined?d.showGrid:true;
+    gridSizeInput.value=state.grid; gridShowInput.checked=state.showGrid;
     state.selectedIds=[]; state.history=[]; state.hIndex=-1;
     docWInput.value=state.docW; docHInput.value=state.docH;
     depthViewBtn.classList.toggle('active',state.depthView);
