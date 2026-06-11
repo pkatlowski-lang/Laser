@@ -465,6 +465,13 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
         <div class="sc-row"><span>Rozgrupuj</span><span class="sc-keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd></span></div>
       </div>
       <div class="sc-group">
+        <h4>Kolejność warstw</h4>
+        <div class="sc-row"><span>Przesuń wyżej</span><span class="sc-keys"><kbd>Ctrl</kbd>+<kbd>]</kbd></span></div>
+        <div class="sc-row"><span>Przesuń niżej</span><span class="sc-keys"><kbd>Ctrl</kbd>+<kbd>[</kbd></span></div>
+        <div class="sc-row"><span>Na wierzch</span><span class="sc-keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>]</kbd></span></div>
+        <div class="sc-row"><span>Na spód</span><span class="sc-keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>[</kbd></span></div>
+      </div>
+      <div class="sc-group">
         <h4>Narzędzia</h4>
         <div class="sc-row"><span>Zaznaczanie</span><span class="sc-keys"><kbd>V</kbd></span></div>
         <div class="sc-row"><span>Rączka (przesuwanie widoku)</span><span class="sc-keys"><kbd>H</kbd></span></div>
@@ -2334,6 +2341,10 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='c'){ if(!typing){ e.preventDefault(); copySel(); } return; }
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='v'){ if(!typing){ e.preventDefault(); pasteClipboard(); } return; }
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='a'){ if(!typing){ e.preventDefault(); state.selectedIds=expandGroupSelection(state.objects.filter(o=>!o.locked).map(o=>o.id)); renderOverlay(); renderLayers(); renderProps(); } return; }
+    if((e.ctrlKey||e.metaKey)&&(e.key===']'||e.key==='[')){ if(!typing){ e.preventDefault();
+      if(e.key===']') e.shiftKey?bringToFront():bringForward();
+      else e.shiftKey?sendToBack():sendBackward();
+    } return; }
     if(typing) return;
     if(e.key==='1'){ e.preventDefault(); zoomFit(); return; }
     if(e.key==='2'){ e.preventDefault(); zoomToSelection(); return; }
@@ -2364,6 +2375,26 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     state.objects.unshift(...sel);
     pushHistory(); renderAll(); renderProps();
   }
+  function bringForward(){
+    const ids=state.selectedIds.slice(); if(!ids.length) return;
+    let changed=false;
+    for(let i=state.objects.length-2;i>=0;i--){
+      if(ids.includes(state.objects[i].id) && !ids.includes(state.objects[i+1].id)){
+        [state.objects[i],state.objects[i+1]]=[state.objects[i+1],state.objects[i]]; changed=true;
+      }
+    }
+    if(changed){ pushHistory(); renderAll(); renderProps(); }
+  }
+  function sendBackward(){
+    const ids=state.selectedIds.slice(); if(!ids.length) return;
+    let changed=false;
+    for(let i=1;i<state.objects.length;i++){
+      if(ids.includes(state.objects[i].id) && !ids.includes(state.objects[i-1].id)){
+        [state.objects[i],state.objects[i-1]]=[state.objects[i-1],state.objects[i]]; changed=true;
+      }
+    }
+    if(changed){ pushHistory(); renderAll(); renderProps(); }
+  }
   const ctxMenu=document.getElementById('ctxMenu');
   function closeCtxMenu(){ ctxMenu.classList.remove('open'); ctxMenu.innerHTML=''; }
   function ctxItem(label,action,opts){ opts=opts||{};
@@ -2387,8 +2418,10 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       h+=ctxItem('⎘ Kopiuj <span class="ctx-key">Ctrl+C</span>','copy');
       h+=ctxItem('🗑 Usuń <span class="ctx-key">Del</span>','delete');
       h+='<hr>';
-      h+=ctxItem('⤒ Na wierzch','front');
-      h+=ctxItem('⤓ Na spód','back');
+      h+=ctxItem('⤒ Na wierzch <span class="ctx-key">Ctrl+Shift+]</span>','front');
+      h+=ctxItem('⬆ Wyżej <span class="ctx-key">Ctrl+]</span>','forward');
+      h+=ctxItem('⬇ Niżej <span class="ctx-key">Ctrl+[</span>','backward');
+      h+=ctxItem('⤓ Na spód <span class="ctx-key">Ctrl+Shift+[</span>','back');
       if(single&&(single.type==='path'||single.type==='text')){
         h+='<hr>';
         h+=ctxItem(`↔ Odbij poziomo${single.flipX?' ✓':''}`,'flipx');
@@ -2419,6 +2452,8 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       case 'delete': deleteSel(); break;
       case 'front': bringToFront(); break;
       case 'back': sendToBack(); break;
+      case 'forward': bringForward(); break;
+      case 'backward': sendBackward(); break;
       case 'group': groupSel(); break;
       case 'ungroup': ungroupSel(); break;
       case 'flipx': if(o){ o.flipX=!o.flipX; renderProps(); renderAll(); pushHistory(); scheduleLive3D(); } break;
