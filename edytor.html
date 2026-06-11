@@ -308,6 +308,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       <button class="tbtn" id="depthViewBtn" title="Tryb warstw 3D — pokoloruj elementy według warstwy głębokości (kliknij ponownie aby wyłączyć)">🎨 Warstwy</button>
       <button class="tbtn" id="preview3dBtn" title="Podgląd 3D — interaktywna wizualizacja projektu jako stos warstw materiału">🎯 Podgląd 3D</button>
       <button class="tbtn" id="exportBtn" style="background:linear-gradient(135deg,var(--accent),var(--accent-dark));border-color:var(--accent);color:#1a1308">⬇ Pobierz SVG</button>
+      <button class="tbtn" id="exportDxfBtn" title="Eksportuj projekt jako plik DXF (do programów CNC/laser, np. LightBurn, AutoCAD)">⬇ Pobierz DXF</button>
       <button class="tbtn" id="export3dBtn" title="Eksport 3D — pobierz osobne SVG dla każdej warstwy głębokości i sklejaj je, by uzyskać efekt 3D">🧊 Eksport 3D</button>
     </div>
     <div class="tgroup">
@@ -2109,6 +2110,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   snapBtn.classList.toggle('active',state.snap);
   snapBtn.addEventListener('click',()=>{ state.snap=!state.snap; snapBtn.classList.toggle('active',state.snap); });
   document.getElementById('exportBtn').addEventListener('click',exportSVG);
+  document.getElementById('exportDxfBtn').addEventListener('click',exportDXF);
 
   /* ---------------- Ustawienia siatki ---------------- */
   const gridSizeInput=document.getElementById('gridSizeInput'), gridShowInput=document.getElementById('gridShowInput');
@@ -2550,8 +2552,8 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       const thick=Math.max(3, mm*pxPerMM);     // grubość płyty w px (proporcjonalna do mm)
       // KUMULATYWNA sylwetka: wszystkie elementy na warstwach >= dep
       const objs=vis.filter(o=>(o.depth||1)>=dep);
-      const geomObjs=objs.filter(o=>BOOL_TYPES.includes(o.type));
-      const otherObjs=objs.filter(o=>!BOOL_TYPES.includes(o.type));
+      const geomObjs=objs.filter(o=>BOOL_TYPES.includes(o.type)||o.type==='text');
+      const otherObjs=objs.filter(o=>o.type==='line');
       // scalony obrys geometrii (bez wewnętrznych linii) — jedna ścieżka, otwory przez fill-rule evenodd
       const rings=mergeLayerRings(geomObjs, dep);
       const zTop=zBase+thick;                   // górna ścianka tej płyty
@@ -2574,17 +2576,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       const topOther=otherObjs.map(o=>objMarkup(o,false)).join('');
       _silFill=null;
       const top=`<div class="l3d-layer" style="width:${sw}px;height:${sh}px;transform:translateZ(${fmt(zTop)}px)">${svgOpen}${topPath}${topOther}</svg></div>`;
-      // ---- elementy nie-geometryczne (np. tekst) bez własnej geometrii do ekstruzji -> kilka cienkich warstw jako przybliżenie bryły ----
-      let otherWalls='';
-      if(otherObjs.length){
-        const slices=Math.max(2,Math.min(6,Math.round(thick/4)));
-        _silFill=wallCol;
-        const wallBody=otherObjs.map(o=>objMarkup(o,false)).join('');
-        _silFill=null;
-        for(let j=slices-1;j>=1;j--){ const z=zBase+(j/slices)*thick;
-          otherWalls+=`<div class="l3d-layer" style="width:${sw}px;height:${sh}px;transform:translateZ(${fmt(z)}px)">${svgOpen}${wallBody}</svg></div>`; }
-      }
-      html+=otherWalls+walls+top;
+      html+=walls+top;
       zBase=zTop;                               // następna warstwa zaczyna się na wierzchu tej
     });
     sceneEl.innerHTML=html;
@@ -2676,7 +2668,12 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
      zostaje jedna scalona bryła warstwy. Dekoracje (grawer/nacięcie) z danej warstwy
      rysujemy na wierzchu. Wszystkie warstwy w JEDNYM pliku, rozsunięte obok siebie. */
   function unionAll(polys){
-    const list=polys.filter(p=>p&&p.length>=3);
+    // deterministyczny mikro-jitter (~0.004mm, niewidoczny dla lasera) — bez niego
+    // gęsto próbkowane kontury (objSubPolys) mają mnóstwo współliniowych punktów,
+    // na których Greiner-Hormann gubi część przecięć i nie scala nakładających się kształtów
+    const EPS=0.004;
+    const jitter=pts=>pts.map((p,i)=>[p[0]+Math.sin((i+1)*12.9898)*EPS, p[1]+Math.cos((i+1)*78.233)*EPS]);
+    const list=polys.filter(p=>p&&p.length>=3).map(jitter);
     let changed=true, guard=0;
     while(changed && guard++<200){ changed=false;
       for(let i=0;i<list.length && !changed;i++){
@@ -2718,16 +2715,30 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   // dodatkowego otworu/linii (płyta pod nimi musi pozostać pełna, bo to na niej leżą).
   function mergeLayerRings(objs, dep){
     let rings=[];
-    objs.forEach(o=>{ const own=(o.depth||1)===dep;
-      objSubPolys(o).forEach(r=>{ const sr=simplifyRing(r,0.15); if(sr.length>=3) rings.push({pts:sr, area:Math.abs(polyArea(sr)), c:polyCentroid(sr), own}); }); });
+    objs.forEach(o=>{
+      let polys;
+      if(o.type==='text'){
+        // tekst: traktujemy jak prostokąt (obrócony bbox) — daje podparcie warstwom
+        // poniżej i własny kontur do wycięcia na swojej warstwie
+        const b=objBBox(o), c={x:b.x+b.w/2,y:b.y+b.h/2}, rot=deg2rad(o.rotation||0);
+        polys=[[[b.x,b.y],[b.x+b.w,b.y],[b.x+b.w,b.y+b.h],[b.x,b.y+b.h]].map(([x,y])=>{ const p=rotatePt(x,y,c.x,c.y,rot); return [p.x,p.y]; })];
+      } else {
+        polys=objSubPolys(o);
+      }
+      polys.forEach(r=>{ const sr=simplifyRing(r,0.15); if(sr.length>=3) rings.push({pts:sr, area:Math.abs(polyArea(sr)), c:polyCentroid(sr), oid:o.id}); });
+    });
     if(!rings.length) return [];
     rings.sort((a,b)=>b.area-a.area);
-    // klasyfikacja: pierścień jest "otworem", jeśli jego środek leży w innym (większym) pierścieniu
+    // "prawdziwy otwór" = kontur zagnieżdżony w WIĘKSZYM konturze TEGO SAMEGO obiektu
+    // (np. wnętrze litery "O") — to jedyny przypadek zostawiany jako osobna linia cięcia.
+    // Jeśli w tym miejscu jest jednak inny obiekt (z dowolnej warstwy), otwór znika
+    // (płyta musi tam zostać pełna) i trafia do scalenia razem z resztą -> bez sztucznych
+    // dziur/linii wewnętrznych przy nakładających się lub zagnieżdżonych kształtach.
     const shells=[], holes=[];
     rings.forEach(r=>{
-      const inside=rings.some(o=>o!==r && o.area>r.area && pointInPoly(r.c, o.pts));
-      if(inside && !r.own) return; // kontur wyższej warstwy w pełni objęty inną sylwetką -> pomijamy (bez duplikatu linii)
-      (inside?holes:shells).push(r);
+      const sameObjHole=rings.some(o=>o!==r && o.oid===r.oid && o.area>r.area && pointInPoly(r.c,o.pts));
+      const filledByOther=sameObjHole && rings.some(o=>o.oid!==r.oid && pointInPoly(r.c,o.pts));
+      (sameObjHole && !filledByOther ? holes : shells).push(r);
     });
     const merged=unionAll(shells.map(s=>s.pts));
     return merged.concat(holes.map(h=>h.pts));
@@ -2742,18 +2753,20 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     let groups='';
     depths.forEach((dep,i)=>{
       const ox=i*(W+gap), col=depthColor(dep);
-      // kształty (nie-tekstowe) na warstwach >= dep łączymy w jeden obrys (model podpierający)
-      const cutObjs=vis.filter(o=>o.type!=='text' && (o.depth||1)>=dep && o.mode!=='engrave');
+      // kontur do wycięcia tej płyty: kształty (cięcie/nacięcie) ORAZ tekst (zawsze, niezależnie
+      // od trybu) z warstw >= dep — scalone w jeden obrys bez wewnętrznych linii (unionAll),
+      // bo wszystko co leży na/nad tą płytą wymaga pełnego materiału pod sobą
+      const cutObjs=vis.filter(o=>(o.depth||1)>=dep && (o.type==='text' || (BOOL_TYPES.includes(o.type) && o.mode!=='engrave')));
       const rings=mergeLayerRings(cutObjs, dep);
       const cutPaths=rings.map(r=>`<path d="${polyToPathD(r)}" fill="none" stroke="${COLORS.cut}" stroke-width="0.3"/>`).join('');
-      // napisy (cięcie/nacięcie) nie da się scalić w jeden obrys (brak danych konturu czcionki) —
-      // rysujemy je jako osobne <text> z konturem, na każdej warstwie którą podpierają
-      const cutTexts=vis.filter(o=>o.type==='text' && (o.depth||1)>=dep && o.mode!=='engrave').map(o=>objMarkup(o,true)).join('');
-      // dekoracje (grawer) rysujemy tylko na ich własnej warstwie
-      const deco=vis.filter(o=>(o.depth||1)===dep && o.mode==='engrave').map(o=>objMarkup(o,true)).join('');
+      // tekst tej warstwy — zawsze jako KONTUR liter (nawet w trybie "grawer"), żeby dało się go wyciąć
+      const textOwn=vis.filter(o=>o.type==='text' && (o.depth||1)===dep)
+        .map(o=> o.mode==='engrave' ? objMarkup({...o,mode:'cut'},true) : objMarkup(o,true)).join('');
+      // dekoracje (grawer) kształtów z tej warstwy — rysowane na wierzchu obrysu cięcia
+      const deco=vis.filter(o=>(o.depth||1)===dep && o.mode==='engrave' && o.type!=='text').map(o=>objMarkup(o,true)).join('');
       groups+=`<g class="warstwa-${dep}" data-warstwa="${dep}" transform="translate(${fmt(ox)} ${labelH})">`+
         `<text x="${fmt(W/2)}" y="-3" font-size="6" text-anchor="middle" fill="${col}" font-family="sans-serif">Warstwa ${dep} · ${fmt(layerMM(dep))} mm</text>`+
-        cutPaths+cutTexts+deco+`</g>`;
+        cutPaths+textOwn+deco+`</g>`;
     });
     const svg=`<svg xmlns="${SVG_NS}" viewBox="0 0 ${fmt(totalW)} ${fmt(H+labelH)}" width="${fmt(totalW)}mm" height="${fmt(H+labelH)}mm">${groups}</svg>`;
     return {svg, w:totalW, h:H+labelH};
@@ -2773,6 +2786,76 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     const svg=`<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="${SVG_NS}" viewBox="0 0 ${W} ${H}" width="${W}mm" height="${H}mm">\n${body}\n</svg>`;
     const blob=new Blob([svg],{type:'image/svg+xml'}); const url=URL.createObjectURL(blob);
     const a=document.createElement('a'); a.href=url; a.download=`projekt-laser-${Date.now()}.svg`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  }
+
+  /* ---------------- Eksport DXF (dla programów CNC/laser: LightBurn, AutoCAD, itp.) ---------------- */
+  // Kody grup DXF: para (kod, wartość), każdy w osobnej linii. Oś Y w DXF rośnie w górę,
+  // więc odbijamy współrzędne (H - y) względem osi Y dokumentu (która rośnie w dół, jak w SVG).
+  const DXF_LAYER_ACI=[3,1,5,2,6,4]; // zielony, czerwony, niebieski, żółty, magenta, cyjan — wg numeru warstwy głębokości
+  // Stosuje listę transformacji SVG (translate/rotate/scale, jak z repeatTransforms) do punktów —
+  // transformacje stosowane są w kolejności SVG (od prawej do lewej w łańcuchu).
+  function applyTransformStr(pts, t){
+    if(!t) return pts;
+    const ops=[]; const re=/(\w+)\(([^)]*)\)/g; let m;
+    while((m=re.exec(t))) ops.push([m[1], m[2].trim().split(/[\s,]+/).map(Number)]);
+    for(let i=ops.length-1;i>=0;i--){
+      const [name,args]=ops[i];
+      if(name==='translate'){ const tx=args[0]||0, ty=args[1]||0; pts=pts.map(([x,y])=>[x+tx,y+ty]); }
+      else if(name==='scale'){ const sx=args[0]??1, sy=args.length>1?args[1]:sx; pts=pts.map(([x,y])=>[x*sx,y*sy]); }
+      else if(name==='rotate'){ const a=deg2rad(args[0]||0), cx=args[1]||0, cy=args[2]||0; pts=pts.map(([x,y])=>{ const rp=rotatePt(x,y,cx,cy,a); return [rp.x,rp.y]; }); }
+    }
+    return pts;
+  }
+  function exportDXF(){
+    const H=state.docH;
+    const objs=state.objects.filter(o=>o.visible && o.type!=='image');
+    if(!objs.length){ alert('Brak obiektów do eksportu.'); return; }
+    const depths=[...new Set(objs.map(o=>o.depth||1))].sort((a,b)=>a-b);
+    let layerDefs='';
+    depths.forEach(dep=>{
+      const aci=DXF_LAYER_ACI[(dep-1)%DXF_LAYER_ACI.length];
+      layerDefs+=`0\nLAYER\n2\nWARSTWA_${dep}\n70\n0\n62\n${aci}\n6\nCONTINUOUS\n`;
+    });
+    const dx=v=>fmt(v), dy=v=>fmt(H-v);
+    let ents='';
+    objs.forEach(o=>{
+      const layer=`WARSTWA_${o.depth||1}`;
+      const transforms=repeatTransforms(o);
+      if(o.type==='text'){
+        const fs=o.fontSize||24;
+        const tsx=(o.tsx||1)*(o.flipX?-1:1), tsy=(o.tsy||1)*(o.flipY?-1:1);
+        const ax=o.x, ay=o.y+fs*0.34;
+        const b=objBBox(o), c={x:b.x+b.w/2,y:b.y+b.h/2};
+        const base=rotatePt(ax,ay,c.x,c.y,deg2rad(o.rotation||0));
+        const ang=((360-(o.rotation||0))%360+360)%360;
+        const height=Math.max(0.1, fs*Math.abs(tsy));
+        const wf=Math.abs(tsy)>1e-6 ? Math.abs(tsx/tsy) : 1;
+        const text=String(o.text||'').replace(/\\/g,'\\\\').replace(/\r?\n/g,'\\P');
+        transforms.forEach(t=>{
+          const [p]=applyTransformStr([[base.x,base.y]], t);
+          ents+=`0\nTEXT\n8\n${layer}\n10\n${dx(p[0])}\n20\n${dy(p[1])}\n30\n0\n40\n${fmt(height)}\n1\n${text}\n50\n${fmt(ang)}\n41\n${fmt(wf)}\n7\nSTANDARD\n72\n1\n73\n2\n11\n${dx(p[0])}\n21\n${dy(p[1])}\n31\n0\n`;
+        });
+      } else {
+        const basePolys=objSubPolys(o);
+        transforms.forEach(t=>{
+          basePolys.forEach(poly=>{
+            const pts=applyTransformStr(poly.map(p=>p.slice()), t);
+            if(pts.length<2) return;
+            // POLYLINE/VERTEX/SEQEND (format R12/AC1009) — prosty, szeroko wspierany
+            // przez programy CNC/laser (LightBurn, AutoCAD i in.) bez znaczników podklas
+            ents+=`0\nPOLYLINE\n8\n${layer}\n66\n1\n70\n1\n`;
+            pts.forEach(([px,py])=>{ ents+=`0\nVERTEX\n8\n${layer}\n10\n${dx(px)}\n20\n${dy(py)}\n30\n0\n`; });
+            ents+=`0\nSEQEND\n8\n${layer}\n`;
+          });
+        });
+      }
+    });
+    const dxf=`0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1009\n0\nENDSEC\n`+
+      `0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n70\n${depths.length}\n${layerDefs}0\nENDTAB\n0\nENDSEC\n`+
+      `0\nSECTION\n2\nENTITIES\n${ents}0\nENDSEC\n0\nEOF\n`;
+    const blob=new Blob([dxf],{type:'application/dxf'}); const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download=`projekt-laser-${Date.now()}.dxf`;
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
   }
 
@@ -3012,6 +3095,9 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   updateLive3D();
   pushHistory();
   window.addEventListener('resize',()=>{ syncViewAspect(); applyView(); renderOverlay(); });
+
+  // Hak debugowy do testów (Playwright) — bez wpływu na działanie edytora
+  window.__lzr={state, buildSeparatedSVG, buildLayerScene, mergeLayerRings, unionAll, objSubPolys, objBBox, polyArea, renderAll, updateLive3D};
 })();
 </script>
 </body>
