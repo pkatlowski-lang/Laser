@@ -230,6 +230,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
 .bb-spacer{flex:1}
 .bb-btn{border:1.5px solid var(--border);background:var(--surface2);color:var(--text);font-size:.72rem;font-weight:600;padding:4px 10px;border-radius:6px;cursor:pointer}
 .bb-btn:hover{border-color:var(--accent);color:var(--accent)}
+.zoom-badge{font-size:.7rem;font-weight:700;color:var(--muted);background:var(--surface2);border:1.5px solid var(--border);border-radius:6px;padding:4px 8px;min-width:42px;text-align:center}
 .live3d-stage{flex:1;perspective:1100px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:radial-gradient(ellipse 65% 60% at 50% 58%,#171738 0%,#05050b 100%);cursor:grab}
 .live3d-stage.l3d-dragging{cursor:grabbing}
 .live3d-scene{transform-style:preserve-3d;position:relative}
@@ -398,6 +399,8 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     <div class="bb-sec">
       <div class="bb-head"><span>🧊 Wizualizacja 3D — stos warstw materiału</span>
         <span class="bb-spacer"></span>
+        <span class="zoom-badge" id="live3dZoomLabel" title="Przybliżenie (kółko myszy = zoom w miejscu kursora)">100%</span>
+        <button class="bb-btn" id="live3dZoomReset" title="Zresetuj przybliżenie">⟲ 100%</button>
         <button class="bb-btn" id="live3dExpand" title="Powiększ na cały ekran">⛶ Powiększ</button>
       </div>
       <div class="live3d-stage" id="live3dStage"><div class="live3d-scene" id="live3dScene"></div></div>
@@ -419,11 +422,15 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   <div class="modal-box" style="max-width:860px">
     <button class="modal-close" id="modal3dPrevClose" title="Zamknij">✕</button>
     <h3>🎯 Wizualizacja 3D projektu</h3>
-    <div class="p3d-controls">Grubości warstw ustawiasz w mm w panelu „Warstwy 3D” po lewej — model 3D odwzorowuje je proporcjonalnie.</div>
+    <div class="p3d-controls">Grubości warstw ustawiasz w mm w panelu „Warstwy 3D” po lewej — model 3D odwzorowuje je proporcjonalnie.
+      <span class="bb-spacer"></span>
+      <span class="zoom-badge" id="p3dZoomLabel" title="Przybliżenie (kółko myszy = zoom w miejscu kursora)">100%</span>
+      <button class="bb-btn" id="p3dZoomReset" title="Zresetuj przybliżenie i obrót">⟲ Reset widoku</button>
+    </div>
     <div class="preview3d-wrap" id="p3dWrap">
       <div class="preview3d-scene" id="p3dScene"></div>
     </div>
-    <p style="font-size:.72rem;color:var(--muted);text-align:center;margin-top:8px">Przeciągnij aby obrócić · kółko myszy = zmień perspektywę · każdy kolor = osobna warstwa materiału</p>
+    <p style="font-size:.72rem;color:var(--muted);text-align:center;margin-top:8px">Przeciągnij aby obrócić · kółko myszy = przybliż / oddal w miejscu kursora · podwójne kliknięcie = reset widoku · każdy kolor = osobna warstwa materiału</p>
   </div>
 </div>
 
@@ -3027,10 +3034,29 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
 
   /* ----- Bottom dock: live 3D + live SVG split ----- */
   let liveRot={x:60,z:-28}, liveDrag=null, live3dRAF=null;
+  let liveZoom={scale:1,x:0,y:0};
   const live3dStage=document.getElementById('live3dStage');
   const live3dScene=document.getElementById('live3dScene');
+  const live3dZoomLabel=document.getElementById('live3dZoomLabel');
   const bbSvgEl=document.getElementById('bbSvg');
-  function applyLiveRot(){ live3dScene.style.transform=`rotateX(${liveRot.x}deg) rotateZ(${liveRot.z}deg)`; }
+  function applyLiveRot(){
+    live3dScene.style.transform=`translate(${fmt(liveZoom.x)}px,${fmt(liveZoom.y)}px) scale(${fmt(liveZoom.scale)}) rotateX(${liveRot.x}deg) rotateZ(${liveRot.z}deg)`;
+    live3dZoomLabel.textContent=Math.round(liveZoom.scale*100)+'%';
+  }
+  // Zoom kółkiem myszy wyśrodkowany na pozycji kursora: punkt sceny pod kursorem
+  // zostaje w tym samym miejscu na ekranie po zmianie skali (translate+scale są
+  // skrajnymi (zewnętrznymi) transformacjami w łańcuchu, więc działają jak "kamera"
+  // niezależnie od obrotu rotateX/rotateZ).
+  function zoomAtPoint(zoom, el, clientX, clientY, deltaY){
+    const rect=el.getBoundingClientRect();
+    const cx=clientX-(rect.left+rect.width/2), cy=clientY-(rect.top+rect.height/2);
+    const factor=deltaY<0?1.15:1/1.15;
+    const newScale=Math.max(0.4,Math.min(6,zoom.scale*factor));
+    const ratio=newScale/zoom.scale;
+    zoom.x=cx-(cx-zoom.x)*ratio;
+    zoom.y=cy-(cy-zoom.y)*ratio;
+    zoom.scale=newScale;
+  }
   function updateLive3D(){
     const W=state.docW,H=state.docH;
     const sh=live3dStage.clientHeight||200;
@@ -3055,22 +3081,30 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   live3dStage.addEventListener('pointermove',e=>{ if(!liveDrag) return; const dx=e.clientX-liveDrag.sx, dy=e.clientY-liveDrag.sy;
     liveRot.x=Math.max(5,Math.min(88,liveDrag.rx-dy*0.4)); liveRot.z=liveDrag.rz+dx*0.4; applyLiveRot(); });
   live3dStage.addEventListener('pointerup',()=>{ liveDrag=null; live3dStage.classList.remove('l3d-dragging'); });
+  live3dStage.addEventListener('wheel',e=>{ e.preventDefault(); zoomAtPoint(liveZoom, live3dScene, e.clientX, e.clientY, e.deltaY); applyLiveRot(); },{passive:false});
+  live3dStage.addEventListener('dblclick',()=>{ liveZoom={scale:1,x:0,y:0}; applyLiveRot(); });
+  document.getElementById('live3dZoomReset').addEventListener('click',()=>{ liveZoom={scale:1,x:0,y:0}; applyLiveRot(); });
   document.getElementById('live3dExpand').addEventListener('click',showPreview3D);
   document.getElementById('bbDownload').addEventListener('click',downloadSeparatedSVG);
   document.getElementById('bbSvgExpand').addEventListener('click',showSvgPreview);
 
   /* ----- Big modal preview ----- */
-  let p3dRot={x:54,z:-24}, p3dDrag=null;
+  let p3dRot={x:54,z:-24}, p3dDrag=null, p3dZoom={scale:1,x:0,y:0};
+  const p3dScene=document.getElementById('p3dScene');
+  const p3dZoomLabel=document.getElementById('p3dZoomLabel');
+  function applyP3DTransform(){
+    p3dScene.style.transform=`translate(${fmt(p3dZoom.x)}px,${fmt(p3dZoom.y)}px) scale(${fmt(p3dZoom.scale)}) rotateX(${p3dRot.x}deg) rotateZ(${p3dRot.z}deg)`;
+    p3dZoomLabel.textContent=Math.round(p3dZoom.scale*100)+'%';
+  }
   function showPreview3D(){
     const W=state.docW, H=state.docH;
     const vis=state.objects.filter(o=>o.visible && o.type!=='image' && !state.hiddenDepths.includes(o.depth||1));
     if(!vis.length){ alert('Brak widocznych elementów do wizualizacji 3D.'); return; }
-    const scene=document.getElementById('p3dScene');
     const sw=Math.min(360, Math.round(W/H*300));
     const pxPerMM=Math.max(2, Math.min(10, 200/totalStackMM()));
-    buildLayerScene(scene, sw, pxPerMM);
-    p3dRot={x:54,z:-24};
-    scene.style.transform=`rotateX(${p3dRot.x}deg) rotateZ(${p3dRot.z}deg)`;
+    buildLayerScene(p3dScene, sw, pxPerMM);
+    p3dRot={x:54,z:-24}; p3dZoom={scale:1,x:0,y:0};
+    applyP3DTransform();
     document.getElementById('modal3dPrev').classList.add('open');
   }
 
@@ -3078,10 +3112,11 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   p3dWrap.addEventListener('pointerdown',e=>{ p3dDrag={sx:e.clientX,sy:e.clientY,rx:p3dRot.x,rz:p3dRot.z}; p3dWrap.classList.add('p3d-dragging'); p3dWrap.setPointerCapture(e.pointerId); });
   p3dWrap.addEventListener('pointermove',e=>{ if(!p3dDrag) return; const dx=e.clientX-p3dDrag.sx, dy=e.clientY-p3dDrag.sy;
     p3dRot.x=Math.max(5,Math.min(88,p3dDrag.rx-dy*0.42)); p3dRot.z=p3dDrag.rz+dx*0.42;
-    document.getElementById('p3dScene').style.transform=`rotateX(${p3dRot.x}deg) rotateZ(${p3dRot.z}deg)`; });
+    applyP3DTransform(); });
   p3dWrap.addEventListener('pointerup',()=>{ p3dDrag=null; p3dWrap.classList.remove('p3d-dragging'); });
-  p3dWrap.addEventListener('wheel',e=>{ e.preventDefault(); p3dRot.x=Math.max(5,Math.min(88,p3dRot.x+(e.deltaY>0?1.5:-1.5)));
-    document.getElementById('p3dScene').style.transform=`rotateX(${p3dRot.x}deg) rotateZ(${p3dRot.z}deg)`; },{passive:false});
+  p3dWrap.addEventListener('wheel',e=>{ e.preventDefault(); zoomAtPoint(p3dZoom, p3dScene, e.clientX, e.clientY, e.deltaY); applyP3DTransform(); },{passive:false});
+  p3dWrap.addEventListener('dblclick',()=>{ p3dRot={x:54,z:-24}; p3dZoom={scale:1,x:0,y:0}; applyP3DTransform(); });
+  document.getElementById('p3dZoomReset').addEventListener('click',()=>{ p3dRot={x:54,z:-24}; p3dZoom={scale:1,x:0,y:0}; applyP3DTransform(); });
   document.getElementById('preview3dBtn').addEventListener('click',showPreview3D);
   document.getElementById('loadFontsBtn').addEventListener('click',loadLocalFonts);
   document.getElementById('modal3dPrevClose').addEventListener('click',()=>document.getElementById('modal3dPrev').classList.remove('open'));
