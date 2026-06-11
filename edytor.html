@@ -1052,7 +1052,12 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     }
     return [...result];
   }
-  function select(id){ state.selectedIds = id? expandGroupSelection([id]) : []; renderOverlay(); renderLayers(); renderProps(); }
+  function select(id){
+    const next = id? expandGroupSelection([id]) : [];
+    const same = next.length===state.selectedIds.length && next.every(x=>state.selectedIds.includes(x));
+    state.selectedIds = next; renderOverlay(); renderProps();
+    if(!same) renderLayers(); // przy tej samej selekcji nie przebudowuj listy warstw — umożliwia dwuklik na nazwie
+  }
   function toggleSelection(id){
     const i=state.selectedIds.indexOf(id);
     if(i>=0){
@@ -2662,10 +2667,6 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
         <span class="swatch ${sw}"></span>
         ${dbadge}
         <span class="lname" title="Kliknij dwukrotnie, aby zmienić nazwę">${escapeXml(autoName(o))}</span>
-        <button class="lico" data-act="top" title="Na wierzch">⤒</button>
-        <button class="lico" data-act="up" title="Wyżej">▲</button>
-        <button class="lico" data-act="down" title="Niżej">▼</button>
-        <button class="lico" data-act="bottom" title="Na spód">⤓</button>
         <button class="lico" data-act="vis" title="Pokaż/ukryj">${o.visible?'👁':'🚫'}</button>
         <button class="lico" data-act="lock" title="Zablokuj">${o.locked?'🔒':'🔓'}</button>
         <button class="lico" data-act="del" title="Usuń">✕</button>
@@ -2703,11 +2704,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   }
   function layerAction(id,act){
     const i=state.objects.findIndex(o=>o.id===id); if(i<0) return; const o=state.objects[i];
-    if(act==='up'){ if(i<state.objects.length-1){ state.objects.splice(i,1); state.objects.splice(i+1,0,o); pushHistory(); } }
-    else if(act==='down'){ if(i>0){ state.objects.splice(i,1); state.objects.splice(i-1,0,o); pushHistory(); } }
-    else if(act==='top'){ if(i<state.objects.length-1){ state.objects.splice(i,1); state.objects.push(o); pushHistory(); } }
-    else if(act==='bottom'){ if(i>0){ state.objects.splice(i,1); state.objects.unshift(o); pushHistory(); } }
-    else if(act==='vis'){ o.visible=!o.visible; pushHistory(); }
+    if(act==='vis'){ o.visible=!o.visible; pushHistory(); }
     else if(act==='lock'){ o.locked=!o.locked; pushHistory(); }
     else if(act==='del'){ state.objects.splice(i,1); state.selectedIds=state.selectedIds.filter(x=>x!==id); pushHistory(); }
     renderAll(); renderProps();
@@ -2763,8 +2760,6 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   document.getElementById('zoomFit').addEventListener('click',zoomFit);
   document.getElementById('zoomSelBtn').addEventListener('click',zoomToSelection);
   const snapBtn=document.getElementById('snapBtn');
-  snapBtn.classList.toggle('active',state.snap);
-  snapBtn.addEventListener('click',()=>{ state.snap=!state.snap; snapBtn.classList.toggle('active',state.snap); });
   document.getElementById('exportBtn').addEventListener('click',exportSVG);
   document.getElementById('exportDxfBtn').addEventListener('click',exportDXF);
 
@@ -2780,8 +2775,15 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     state.showGrid=gridShowInput.checked; renderGrid(); autoSaveProject();
   });
   const snapInput=document.getElementById('snapInput');
-  snapInput.checked=state.snap;
-  snapInput.addEventListener('change',()=>{ state.snap=snapInput.checked; autoSaveProject(); });
+  function setSnap(v,save){
+    state.snap=v;
+    snapBtn.classList.toggle('active',v);
+    snapInput.checked=v;
+    if(save) autoSaveProject();
+  }
+  setSnap(state.snap,false);
+  snapBtn.addEventListener('click',()=>setSnap(!state.snap,true));
+  snapInput.addEventListener('change',()=>setSnap(snapInput.checked,true));
 
   /* ---------------- Rozmiar arkusza roboczego ---------------- */
   const docWInput=document.getElementById('docWInput'), docHInput=document.getElementById('docHInput'), docPreset=document.getElementById('docPreset');
@@ -2826,9 +2828,8 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       state.guides=d.guides&&Array.isArray(d.guides.v)&&Array.isArray(d.guides.h)?d.guides:{v:[],h:[]};
       state.grid=d.grid>0?d.grid:state.grid;
       state.showGrid=d.showGrid!==undefined?d.showGrid:true;
-      state.snap=d.snap!==undefined?!!d.snap:false;
       gridSizeInput.value=state.grid; gridShowInput.checked=state.showGrid;
-      const si=document.getElementById('snapInput'); if(si) si.checked=state.snap;
+      setSnap(d.snap!==undefined?!!d.snap:false,false);
     }catch(e){}
   }
   function applyProjectData(d){
@@ -2841,9 +2842,8 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     state.guides=d.guides&&Array.isArray(d.guides.v)&&Array.isArray(d.guides.h)?d.guides:{v:[],h:[]};
     state.grid=d.grid>0?d.grid:1;
     state.showGrid=d.showGrid!==undefined?d.showGrid:true;
-    state.snap=d.snap!==undefined?!!d.snap:false;
     gridSizeInput.value=state.grid; gridShowInput.checked=state.showGrid;
-    const si2=document.getElementById('snapInput'); if(si2) si2.checked=state.snap;
+    setSnap(d.snap!==undefined?!!d.snap:false,false);
     state.selectedIds=[]; state.history=[]; state.hIndex=-1;
     docWInput.value=state.docW; docHInput.value=state.docH;
     depthViewBtn.classList.toggle('active',state.depthView);
