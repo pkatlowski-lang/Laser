@@ -1037,6 +1037,31 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     pushHistory(); renderAll(); renderProps(); scheduleLive3D();
   }
 
+  /* ---- Konwertuj napis na ścieżkę ze zwektoryzowanymi konturami liter (z otworami w "a","o","e"...) ----
+     Używa textOutlinePolys() — tych samych konturów, co podgląd 3D i eksport SVG — dzięki czemu
+     wynik jest identyczny z tym, co widać na warstwach. Powstaje zwykły obiekt 'path' (fillRule
+     evenodd), który można edytować węzłami, łączyć operacjami logicznymi, offsetować itd. */
+  function convertTextToPath(o){
+    if(!o || o.type!=='text') return;
+    const polys=textOutlinePolys(o);
+    if(!polys.length) return;
+    const b=objBBox(o), c={x:b.x+b.w/2,y:b.y+b.h/2}, rot=-deg2rad(o.rotation||0);
+    const localPolys=polys.map(poly=>poly.map(([x,y])=>{
+      if(o.rotation){ const p=rotatePt(x,y,c.x,c.y,rot); return [p.x,p.y]; }
+      return [x,y];
+    }));
+    const conv=JSON.parse(JSON.stringify(o));
+    conv.d=localPolys.map(polyToPathD).join(' ');
+    conv.fillRule='evenodd';
+    conv.bx=b.x; conv.by=b.y; conv.bw=Math.max(0.01,b.w); conv.bh=Math.max(0.01,b.h);
+    conv.x=0; conv.y=0; conv.sx=1; conv.sy=1; conv.flipX=false; conv.flipY=false;
+    delete conv.text; delete conv.font; delete conv.fontSize; delete conv.bold; delete conv.italic; delete conv.underline; delete conv.tsx; delete conv.tsy;
+    conv.type='path';
+    const i=state.objects.findIndex(x=>x.id===o.id);
+    state.objects[i]=conv; state.selectedIds=[conv.id];
+    pushHistory(); renderAll(); renderProps(); scheduleLive3D();
+  }
+
   /* ---------------- Operacje boolowskie (suma / różnica / część wspólna) ---------------- */
   const BOOL_TYPES=['rect','ellipse','polygon','star','path'];
   function flattenToPoly(o){
@@ -1915,6 +1940,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       h+=`<div class="field"><label>Szerokość napisu (mm)</label><input type="number" id="textW" value="${fmt(tbb.w)}" min="1" step="1"></div>`;
       h+=`<div class="field"><label>Wysokość napisu (mm)</label><input type="number" id="textH" value="${fmt(tbb.h)}" min="1" step="1"></div>`;
       h+=`<div class="field"><button type="button" id="textReset" class="tbtn" style="width:100%;justify-content:center">↺ Przywróć proporcje 1:1</button></div>`;
+      h+=`<div class="field"><button type="button" id="convertTextPathBtn" class="tbtn" style="width:100%;justify-content:center" title="Zamienia napis na zwektoryzowane kontury liter (ścieżkę), które można dowolnie edytować i łączyć operacjami logicznymi">✎ Konwertuj na ścieżkę (kontury liter)</button></div>`;
     }
     // repeat modifier
     const r=o.repeat||{type:'none'};
@@ -2138,6 +2164,8 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     if(nodeEditBtn) nodeEditBtn.addEventListener('click',()=>{ const o=getSel(); if(o) toggleNodeEdit(o); });
     const convertPathBtn=propsEl.querySelector('#convertPathBtn');
     if(convertPathBtn) convertPathBtn.addEventListener('click',()=>{ const o=getSel(); if(o) convertToPath(o); });
+    const convertTextPathBtn=propsEl.querySelector('#convertTextPathBtn');
+    if(convertTextPathBtn) convertTextPathBtn.addEventListener('click',()=>{ const o=getSel(); if(o) convertTextToPath(o); });
     const pathW=propsEl.querySelector('#pathW'), pathH=propsEl.querySelector('#pathH');
     function applyPathSize(){ const ob=getSel(); if(!ob||ob.type!=='path') return;
       const lcx=(ob.bx||0)+(ob.bw||0)/2, lcy=(ob.by||0)+(ob.bh||0)/2;
@@ -2330,12 +2358,12 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     }).join('');
     layersEl.querySelectorAll('.layer').forEach(row=>{
       const id=row.getAttribute('data-id');
-      row.addEventListener('click',e=>{ if(e.target.closest('[data-act]')||e.target.closest('.lname')) return; select(id); });
+      row.addEventListener('click',e=>{ if(e.target.closest('[data-act]')||e.target.closest('.lname')) return; (e.shiftKey||e.ctrlKey||e.metaKey)?toggleSelection(id):select(id); });
       row.querySelectorAll('[data-act]').forEach(btn=>btn.addEventListener('click',e=>{
         e.stopPropagation(); layerAction(id,btn.getAttribute('data-act'));
       }));
       const lname=row.querySelector('.lname');
-      lname.addEventListener('click',()=>select(id));
+      lname.addEventListener('click',e=>{ (e.shiftKey||e.ctrlKey||e.metaKey)?toggleSelection(id):select(id); });
       lname.addEventListener('dblclick',e=>{
         e.stopPropagation();
         const o=state.objects.find(x=>x.id===id); if(!o) return;
@@ -2382,6 +2410,10 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   function restore(s){
     const d=JSON.parse(s);
     state.objects=d.objects; state.selectedIds=d.selectedIds||(d.selectedId?[d.selectedId]:[]);
+    // jeśli edytowaliśmy węzły ścieżki, cofnięcie/ponowienie nie powinno wyrzucać nas z trybu edycji punktów
+    if(state.editingPathId && !state.selectedIds.includes(state.editingPathId) && state.objects.some(o=>o.id===state.editingPathId)){
+      state.selectedIds=[state.editingPathId];
+    }
     if(d.params) state.params=d.params;
     if(d.layerMM) state.layerMM=d.layerMM;
     let docChanged=false;
@@ -3168,34 +3200,20 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     objs.forEach(o=>{
       const layer=`WARSTWA_${o.depth||1}`;
       const transforms=repeatTransforms(o);
-      if(o.type==='text'){
-        const fs=o.fontSize||24;
-        const tsx=(o.tsx||1)*(o.flipX?-1:1), tsy=(o.tsy||1)*(o.flipY?-1:1);
-        const ax=o.x, ay=o.y+fs*0.34;
-        const b=objBBox(o), c={x:b.x+b.w/2,y:b.y+b.h/2};
-        const base=rotatePt(ax,ay,c.x,c.y,deg2rad(o.rotation||0));
-        const ang=((360-(o.rotation||0))%360+360)%360;
-        const height=Math.max(0.1, fs*Math.abs(tsy));
-        const wf=Math.abs(tsy)>1e-6 ? Math.abs(tsx/tsy) : 1;
-        const text=String(o.text||'').replace(/\\/g,'\\\\').replace(/\r?\n/g,'\\P');
-        transforms.forEach(t=>{
-          const [p]=applyTransformStr([[base.x,base.y]], t);
-          ents+=`0\nTEXT\n8\n${layer}\n10\n${dx(p[0])}\n20\n${dy(p[1])}\n30\n0\n40\n${fmt(height)}\n1\n${text}\n50\n${fmt(ang)}\n41\n${fmt(wf)}\n7\nSTANDARD\n72\n1\n73\n2\n11\n${dx(p[0])}\n21\n${dy(p[1])}\n31\n0\n`;
+      // tekst eksportujemy jako zwektoryzowane kontury liter (objSubPolys) zamiast encji TEXT —
+      // dzięki temu kształt w DXF jest niezależny od czcionki dostępnej w programie CNC/laser
+      const basePolys=objSubPolys(o);
+      transforms.forEach(t=>{
+        basePolys.forEach(poly=>{
+          const pts=applyTransformStr(poly.map(p=>p.slice()), t);
+          if(pts.length<2) return;
+          // POLYLINE/VERTEX/SEQEND (format R12/AC1009) — prosty, szeroko wspierany
+          // przez programy CNC/laser (LightBurn, AutoCAD i in.) bez znaczników podklas
+          ents+=`0\nPOLYLINE\n8\n${layer}\n66\n1\n70\n1\n`;
+          pts.forEach(([px,py])=>{ ents+=`0\nVERTEX\n8\n${layer}\n10\n${dx(px)}\n20\n${dy(py)}\n30\n0\n`; });
+          ents+=`0\nSEQEND\n8\n${layer}\n`;
         });
-      } else {
-        const basePolys=objSubPolys(o);
-        transforms.forEach(t=>{
-          basePolys.forEach(poly=>{
-            const pts=applyTransformStr(poly.map(p=>p.slice()), t);
-            if(pts.length<2) return;
-            // POLYLINE/VERTEX/SEQEND (format R12/AC1009) — prosty, szeroko wspierany
-            // przez programy CNC/laser (LightBurn, AutoCAD i in.) bez znaczników podklas
-            ents+=`0\nPOLYLINE\n8\n${layer}\n66\n1\n70\n1\n`;
-            pts.forEach(([px,py])=>{ ents+=`0\nVERTEX\n8\n${layer}\n10\n${dx(px)}\n20\n${dy(py)}\n30\n0\n`; });
-            ents+=`0\nSEQEND\n8\n${layer}\n`;
-          });
-        });
-      }
+      });
     });
     const dxf=`0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1009\n0\nENDSEC\n`+
       `0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n70\n${depths.length}\n${layerDefs}0\nENDTAB\n0\nENDSEC\n`+
