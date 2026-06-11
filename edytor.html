@@ -3602,6 +3602,86 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     modalHinge.classList.remove('open');
   });
 
+  /* ---------------- Generator koła zębatego (zarys ewolwentowy) ---------------- */
+  // Zwraca punkty obrysu koła zębatego (środek w (0,0)) wraz z promieniami:
+  // podziałowym (rp), zasadniczym (rb), wierzchołków (ra) i podstaw (rf).
+  function buildGearPoints(teeth, module, pressureAngleDeg, addF=1, dedF=1.25){
+    const z=Math.max(6,teeth|0), m=module;
+    const alpha=pressureAngleDeg*Math.PI/180;
+    const rp=m*z/2;
+    const rb=rp*Math.cos(alpha);
+    const ra=rp+m*addF;
+    let rf=rp-m*dedF;
+    if(rf<1) rf=1;
+    const invo=r=>{ const c=Math.min(1,rb/r); return Math.sqrt(Math.max(0,1/(c*c)-1)) - Math.acos(c); };
+    const invoP=invo(rp);
+    const half=Math.PI/(2*z);
+    const rStart=Math.max(rb,rf);
+    const flankSteps=6, rootSteps=4;
+    const pts=[];
+    for(let i=0;i<z;i++){
+      const ang=i*2*Math.PI/z;
+      for(let s=0;s<=flankSteps;s++){
+        const r=rStart+(ra-rStart)*s/flankSteps;
+        const phi=-half-(invoP-invo(r));
+        pts.push([r*Math.cos(ang+phi), r*Math.sin(ang+phi)]);
+      }
+      for(let s=flankSteps;s>=0;s--){
+        const r=rStart+(ra-rStart)*s/flankSteps;
+        const phi=half+(invoP-invo(r));
+        pts.push([r*Math.cos(ang+phi), r*Math.sin(ang+phi)]);
+      }
+      if(rf<rb-1e-6){
+        const angNext=(i+1)*2*Math.PI/z;
+        const phiThis=half+(invoP-invo(rStart));
+        const phiNext=-half-(invoP-invo(rStart));
+        const a0=ang+phiThis, a1=angNext+phiNext;
+        for(let s=1;s<rootSteps;s++){
+          const a=a0+(a1-a0)*s/rootSteps;
+          pts.push([rf*Math.cos(a), rf*Math.sin(a)]);
+        }
+      }
+    }
+    return {pts, rp, rb, ra, rf};
+  }
+  const modalGear=document.getElementById('modalGear');
+  function updateGearInfo(){
+    const z=clamp(Number(document.getElementById('gearTeeth').value)||20,6,200);
+    const m=clamp(Number(document.getElementById('gearModule').value)||2,0.2,20);
+    const alpha=clamp(Number(document.getElementById('gearPressure').value)||20,10,30);
+    const bore=clamp(Number(document.getElementById('gearBore').value)||0,0,200);
+    const {rp,ra,rf}=buildGearPoints(z,m,alpha);
+    let info=`Śr. podziałowa: ${fmt(2*rp)} mm · Śr. zewnętrzna: ${fmt(2*ra)} mm · Śr. podstaw: ${fmt(2*rf)} mm`;
+    if(bore>0 && bore>=2*rf-0.5) info+=' ⚠ otwór za duży względem podstaw zębów!';
+    document.getElementById('gearInfo').textContent=info;
+  }
+  document.getElementById('gearGenBtn').addEventListener('click',()=>{ updateGearInfo(); modalGear.classList.add('open'); });
+  document.getElementById('modalGearClose').addEventListener('click',()=>modalGear.classList.remove('open'));
+  modalGear.addEventListener('click',e=>{ if(e.target===modalGear) modalGear.classList.remove('open'); });
+  ['gearTeeth','gearModule','gearPressure','gearBore'].forEach(id=>document.getElementById(id).addEventListener('input',updateGearInfo));
+  document.getElementById('gearGenerateBtn').addEventListener('click',()=>{
+    const z=clamp(Number(document.getElementById('gearTeeth').value)||20,6,200);
+    const m=clamp(Number(document.getElementById('gearModule').value)||2,0.2,20);
+    const alpha=clamp(Number(document.getElementById('gearPressure').value)||20,10,30);
+    const bore=clamp(Number(document.getElementById('gearBore').value)||0,0,200);
+    const {pts,ra,rf}=buildGearPoints(z,m,alpha);
+    if(bore>0 && bore>=2*rf-0.5){ alert('Otwór osi jest za duży względem podstaw zębów — zmniejsz średnicę otworu lub zwiększ moduł/liczbę zębów.'); return; }
+    const px=20, py=20, cx=px+ra, cy=py+ra, W=2*ra, H=2*ra;
+    const gear={id:uid(),type:'path',name:'Koło zębate',d:polyToPathD(pts),fillRule:'nonzero',
+      bx:-ra,by:-ra,bw:W,bh:H,x:cx,y:cy,rotation:0,sx:1,sy:1,mode:'cut',
+      visible:true,locked:false,depth:state.depth||1,repeat:{type:'none'}};
+    const newObjs=[gear];
+    if(bore>0){
+      newObjs.push({...defaultsFor('ellipse'),x:cx-bore/2,y:cy-bore/2,w:bore,h:bore,mode:'cut',role:'hole',name:'Otwór osi',depth:state.depth||1});
+    }
+    if(px+W>state.docW || py+H>state.docH){
+      applyDocSize(Math.max(state.docW,Math.ceil(px+W+5)), Math.max(state.docH,Math.ceil(py+H+5)));
+    }
+    state.objects.push(...newObjs); state.selectedIds=newObjs.map(o=>o.id);
+    pushHistory(); renderAll(); renderProps(); zoomFit();
+    modalGear.classList.remove('open');
+  });
+
   /* ---------------- Gallery of bases ---------------- */
 
   /* Scale all coordinate values in an SVG path d-string by factor s.
