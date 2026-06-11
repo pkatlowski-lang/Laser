@@ -732,19 +732,23 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   }
 
   /* ------ repeat modifier -> list of SVG transform strings ------ */
+  // łączna liczba kopii jest ograniczona — bez tego literówka w polu "kolumny/wiersze"
+  // (np. 1000x1000) wygenerowałaby miliony elementów DOM/poligonów i zamroziła kartę
+  const REPEAT_MAXCOPIES=400;
   function repeatTransforms(o){
     const r=o.repeat;
     if(!r||r.type==='none') return [''];
     const cx=o.x+o.w/2, cy=o.y+o.h/2;
     const list=[];
     if(r.type==='linear'){
-      const n=Math.max(1,r.count|0);
+      const n=Math.min(REPEAT_MAXCOPIES, Math.max(1,r.count|0));
       for(let i=0;i<n;i++) list.push(`translate(${fmt(i*r.dx)} ${fmt(i*r.dy)})`);
     } else if(r.type==='grid'){
-      const cols=Math.max(1,r.cols|0), rows=Math.max(1,r.rows|0);
+      let cols=Math.max(1,r.cols|0), rows=Math.max(1,r.rows|0);
+      while(cols*rows>REPEAT_MAXCOPIES){ if(cols>=rows && cols>1) cols--; else if(rows>1) rows--; else break; }
       for(let ry=0;ry<rows;ry++) for(let rx=0;rx<cols;rx++) list.push(`translate(${fmt(rx*r.dx)} ${fmt(ry*r.dy)})`);
     } else if(r.type==='circular'){
-      const n=Math.max(1,r.count|0), total=r.angle||360, pivX=cx, pivY=cy+(r.radius||0);
+      const n=Math.min(REPEAT_MAXCOPIES, Math.max(1,r.count|0)), total=r.angle||360, pivX=cx, pivY=cy+(r.radius||0);
       for(let i=0;i<n;i++){ const a=i*total/n; list.push(`rotate(${fmt(a)} ${fmt(pivX)} ${fmt(pivY)})`); }
     } else if(r.type==='mirror'){
       list.push('');
@@ -1301,6 +1305,14 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     const subs=d.match(/[Mm][^Mm]*/g)||[d];
     const out=[];
     for(const sd of subs){
+      // szybka ścieżka dla czystych łamanych M/L/Z (np. z polyToPathD — pudełko, koło
+      // zębate, zawias): odczytujemy wierzchołki wprost z `d`. Dla ścieżek z mnóstwem
+      // segmentów getTotalLength/getPointAtLength potrafią zamrozić kartę na wiele sekund.
+      if(/^[MLZ0-9.\-,\s]+$/.test(sd)){
+        const nums=(sd.match(/-?\d+(?:\.\d+)?/g)||[]).map(Number);
+        const pts=[]; for(let i=0;i+1<nums.length;i+=2) pts.push([nums[i],nums[i+1]]);
+        if(pts.length>=3){ out.push(transformObjPts(o, pts)); continue; }
+      }
       const path=document.createElementNS(SVG_NS,'path'); path.setAttribute('d',sd);
       let len; try{ len=path.getTotalLength(); }catch(e){ continue; }
       if(len<0.5) continue;
@@ -2252,7 +2264,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       h+=rangeField('Liczba kopii','repeat.count',r.count||3,1,40,1);
       h+=`<div class="field"><label>Odstęp X / Y (mm)</label><div class="row2"><input type="number" data-prop="repeat.dx" value="${fmt(r.dx??30)}" step="1"><input type="number" data-prop="repeat.dy" value="${fmt(r.dy??0)}" step="1"></div></div>`;
     } else if(r.type==='grid'){
-      h+=`<div class="field"><label>Kolumny / Wiersze</label><div class="row2"><input type="number" data-prop="repeat.cols" value="${r.cols||3}" min="1" step="1"><input type="number" data-prop="repeat.rows" value="${r.rows||3}" min="1" step="1"></div></div>`;
+      h+=`<div class="field"><label>Kolumny / Wiersze</label><div class="row2"><input type="number" data-prop="repeat.cols" value="${r.cols||3}" min="1" max="20" step="1"><input type="number" data-prop="repeat.rows" value="${r.rows||3}" min="1" max="20" step="1"></div></div>`;
       h+=`<div class="field"><label>Odstęp X / Y (mm)</label><div class="row2"><input type="number" data-prop="repeat.dx" value="${fmt(r.dx??30)}" step="1"><input type="number" data-prop="repeat.dy" value="${fmt(r.dy??30)}" step="1"></div></div>`;
     } else if(r.type==='circular'){
       h+=rangeField('Liczba kopii','repeat.count',r.count||6,2,40,1);
@@ -3270,12 +3282,16 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       const ringMeta=rings.map(r=>({pts:r, area:Math.abs(polyArea(r)), c:polyCentroid(r)}));
       const isHoleRing=ringMeta.map(r=>ringMeta.some(o2=>o2!==r && o2.area>r.area && pointInPoly(r.c,o2.pts)));
       // ---- ściany boczne: prawdziwe pionowe "kwadraty" wzdłuż każdej krawędzi obrysu (poza dziurami) ----
+      // gęste kontury (np. palce łączeniowe pudełka) uproszczone do progu ~0.6px na ekranie —
+      // setki/tysiące mikroskopijnych ścianek z transformacją 3D potrafią zamrozić kartę na wiele sekund
+      const wallTol=Math.max(0.05, 0.6/scale);
       let walls='';
       rings.forEach((ring,ringIdx)=>{
         if(isHoleRing[ringIdx]) return;
-        const n=ring.length;
+        const wRing=ring.length>200?simplifyRing(ring,wallTol):ring;
+        const n=wRing.length;
         for(let i=0;i<n;i++){
-          const a=ring[i], b=ring[(i+1)%n];
+          const a=wRing[i], b=wRing[(i+1)%n];
           const ax=a[0]*scale, ay=a[1]*scale, bx=b[0]*scale, by=b[1]*scale;
           const dx=bx-ax, dy=by-ay, len=Math.hypot(dx,dy);
           if(len<0.05) continue;
@@ -3481,7 +3497,10 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     if(!(bb.maxx>bb.minx) || !(bb.maxy>bb.miny)) return [];
     const MAXDIM=1500, pad=2;
     const spanW=bb.maxx-bb.minx, spanH=bb.maxy-bb.miny;
-    const res=Math.max(3, Math.min(12, MAXDIM/Math.max(spanW,spanH)));
+    // res nigdy nie może być na tyle duże, by W/H przekroczyło MAXDIM — przy dużych
+    // sylwetkach (np. cały arkusz pudełka ~6000mm) dolny limit res=3 dawał płótno
+    // 18000x18000px i zamrażał kartę na wiele sekund w getImageData/traceMaskPolys
+    const res=Math.min(12, MAXDIM/Math.max(spanW,spanH,1e-6));
     const W=Math.max(1,Math.ceil(spanW*res))+pad*2, H=Math.max(1,Math.ceil(spanH*res))+pad*2;
     const toPx=([x,y])=>[(x-bb.minx)*res+pad,(y-bb.miny)*res+pad];
     const fillPath=(ctx,poly)=>{ ctx.beginPath(); poly.forEach((p,i)=>{ const [px,py]=toPx(p); i?ctx.lineTo(px,py):ctx.moveTo(px,py); }); ctx.closePath(); ctx.fill(); };
@@ -3798,7 +3817,10 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       applyDocSize(Math.max(state.docW,Math.ceil(totalBB.maxx+5)), Math.max(state.docH,Math.ceil(totalBB.maxy+5)));
     }
     state.objects.push(...newObjs); state.selectedIds=newObjs.map(o=>o.id);
-    pushHistory(); renderAll(); renderProps(); zoomFit();
+    pushHistory();
+    renderAll();
+    renderProps();
+    zoomFit();
     modalBox.classList.remove('open');
   });
 
