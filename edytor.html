@@ -862,6 +862,15 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       return objMarkup(o,false);
     }).join('');
   }
+  // Szybka aktualizacja podczas przeciągania: podmienia zawartość <g data-id> tylko dla
+  // jednego obiektu zamiast renderować od nowa cały dokument — eliminuje "zacinanie się"
+  // przy przesuwaniu/skalowaniu/obracaniu w plikach z dużą liczbą elementów (powielenia).
+  function renderObjectEl(o){
+    const el=gObjects.querySelector(`[data-id="${o.id}"]`);
+    if(!el || !o.visible || (state.hiddenDepths.length && state.hiddenDepths.includes(o.depth||1))){ renderObjects(); return; }
+    const inner=innerGeometry(o,false);
+    el.innerHTML=repeatTransforms(o).map(t=> t? `<g transform="${t}">${inner}</g>` : inner).join('');
+  }
 
   // measured/analytic local (unrotated) bbox of an object
   function objBBox(o){
@@ -932,12 +941,12 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
         const bx=Math.min(b.x,b.x+b.w), by=Math.min(b.y,b.y+b.h), bw=Math.abs(b.w), bh=Math.abs(b.h);
         s+=`<g transform="rotate(${fmt(o.rotation||0)} ${fmt(c.x)} ${fmt(c.y)})"><rect class="sel-box" x="${fmt(bx)}" y="${fmt(by)}" width="${fmt(bw)}" height="${fmt(bh)}" style="opacity:.55"/></g>`;
       });
-      const hr=state.view.w*0.011, hit=hr*2.4;
+      const hr=state.view.w*0.005, hit=hr*2.2;
       const corners=[['nw',minx,miny],['ne',maxx,miny],['se',maxx,maxy],['sw',minx,maxy]];
       let hs='';
       corners.forEach(([k,hx,hy])=>{
-        hs+=`<rect class="sel-handle" x="${fmt(hx-hr)}" y="${fmt(hy-hr)}" width="${fmt(hr*2)}" height="${fmt(hr*2)}" style="pointer-events:none"/>`;
-        hs+=`<rect x="${fmt(hx-hit)}" y="${fmt(hy-hit)}" width="${fmt(hit*2)}" height="${fmt(hit*2)}" fill="transparent" data-mhandle="${k}"/>`;
+        hs+=`<circle class="sel-handle" cx="${fmt(hx)}" cy="${fmt(hy)}" r="${fmt(hr)}" style="pointer-events:none"/>`;
+        hs+=`<circle cx="${fmt(hx)}" cy="${fmt(hy)}" r="${fmt(hit)}" fill="transparent" data-mhandle="${k}"/>`;
       });
       s=`<rect x="${fmt(minx)}" y="${fmt(miny)}" width="${fmt(maxx-minx)}" height="${fmt(maxy-miny)}" fill="none" stroke="#d8a14a" stroke-width="1.6px" vector-effect="non-scaling-stroke"/>`+s+hs+guideLinesMarkup()+dragLabelMarkup();
       gOverlay.innerHTML=s; return;
@@ -947,17 +956,18 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     const hs=[ ['nw',b.x,b.y],['n',b.x+b.w/2,b.y],['ne',b.x+b.w,b.y],
                ['e',b.x+b.w,b.y+b.h/2],['se',b.x+b.w,b.y+b.h],['s',b.x+b.w/2,b.y+b.h],
                ['sw',b.x,b.y+b.h],['w',b.x,b.y+b.h/2] ];
-    const hr=state.view.w*0.011; // visible handle radius (~constant on screen)
-    const hit=hr*2.4;            // larger invisible hit area for easy touch grabbing
+    const hr=state.view.w*0.005;     // visible handle dot radius (~constant on screen)
+    const hit=hr*2.2;                // small invisible hit area — kept tight so it doesn't cover the whole edge
+    const rotR=state.view.w*0.011, rotHit=rotR*2; // rotation handle stays larger/easier to grab
     let s=`<g transform="rotate(${fmt(o.rotation||0)} ${fmt(c.x)} ${fmt(c.y)})">`;
     s+=`<rect class="sel-box" x="${fmt(Math.min(b.x,b.x+b.w))}" y="${fmt(Math.min(b.y,b.y+b.h))}" width="${fmt(Math.abs(b.w))}" height="${fmt(Math.abs(b.h))}"/>`;
-    const rotY=b.y-hr*4;
+    const rotY=b.y-rotR*4;
     s+=`<line class="sel-rot-line" x1="${fmt(c.x)}" y1="${fmt(b.y)}" x2="${fmt(c.x)}" y2="${fmt(rotY)}"/>`;
-    s+=`<circle class="sel-rot" cx="${fmt(c.x)}" cy="${fmt(rotY)}" r="${fmt(hr*1.25)}" style="pointer-events:none"/>`;
-    s+=`<circle cx="${fmt(c.x)}" cy="${fmt(rotY)}" r="${fmt(hit)}" fill="transparent" data-handle="rot"/>`;
+    s+=`<circle class="sel-rot" cx="${fmt(c.x)}" cy="${fmt(rotY)}" r="${fmt(rotR*1.25)}" style="pointer-events:none"/>`;
+    s+=`<circle cx="${fmt(c.x)}" cy="${fmt(rotY)}" r="${fmt(rotHit)}" fill="transparent" data-handle="rot"/>`;
     hs.forEach(([k,hx,hy])=>{
-      s+=`<rect class="sel-handle" x="${fmt(hx-hr)}" y="${fmt(hy-hr)}" width="${fmt(hr*2)}" height="${fmt(hr*2)}" style="pointer-events:none"/>`;
-      s+=`<rect x="${fmt(hx-hit)}" y="${fmt(hy-hit)}" width="${fmt(hit*2)}" height="${fmt(hit*2)}" fill="transparent" data-handle="${k}"/>`;
+      s+=`<circle class="sel-handle" cx="${fmt(hx)}" cy="${fmt(hy)}" r="${fmt(hr)}" style="pointer-events:none"/>`;
+      s+=`<circle cx="${fmt(hx)}" cy="${fmt(hy)}" r="${fmt(hit)}" fill="transparent" data-handle="${k}"/>`;
     });
     s+=`</g>`+guideLinesMarkup()+dragLabelMarkup();
     gOverlay.innerHTML=s;
@@ -1764,7 +1774,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       }
       const mb=objBBox(drag.o);
       state.dragLabel={text:`X: ${fmt(mb.x)}  Y: ${fmt(mb.y)} mm`, x:docP.x, y:docP.y};
-      renderObjects(); renderOverlay(); syncPropsLive();
+      drag.items.forEach(it=>renderObjectEl(it.o)); renderOverlay(); syncPropsLive();
     } else if(drag.mode==='marquee'){
       const x=Math.min(drag.x0,docP.x), y=Math.min(drag.y0,docP.y), w=Math.abs(docP.x-drag.x0), h=Math.abs(docP.y-drag.y0);
       drag.rect={x,y,w,h};
@@ -1775,19 +1785,19 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       else { o.x=Math.min(x0,x1); o.y=Math.min(y0,y1); o.w=Math.abs(x1-x0); o.h=Math.abs(y1-y0); }
       const dw=o.type==='line'?Math.abs(o.w):o.w, dh=o.type==='line'?Math.abs(o.h):o.h;
       state.dragLabel={text:`${fmt(dw)} × ${fmt(dh)} mm`, x:docP.x, y:docP.y};
-      renderObjects(); renderOverlay();
+      renderObjectEl(o); renderOverlay();
     } else if(drag.mode==='rotate'){
       const ang=Math.atan2(docP.y-drag.c.y,docP.x-drag.c.x);
       let deg=drag.startAng+(ang-drag.startMouse)*180/Math.PI;
       if(e.shiftKey) deg=Math.round(deg/15)*15;
       drag.o.rotation=((deg%360)+360)%360;
       state.dragLabel={text:`${fmt(drag.o.rotation)}°`, x:docP.x, y:docP.y};
-      renderObjects(); renderOverlay(); syncPropsLive();
+      renderObjectEl(drag.o); renderOverlay(); syncPropsLive();
     } else if(drag.mode==='resize'){
       doResize(drag,docP,e.shiftKey);
       const rb=objBBox(drag.o);
       state.dragLabel={text:`${fmt(rb.w)} × ${fmt(rb.h)} mm`, x:docP.x, y:docP.y};
-      renderObjects(); renderOverlay(); syncPropsLive();
+      renderObjectEl(drag.o); renderOverlay(); syncPropsLive();
     } else if(drag.mode==='mresize'){
       const a=drag.anchor;
       const dist=Math.hypot(docP.x-a.x, docP.y-a.y)||0;
@@ -1797,14 +1807,14 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
         applyGroupScale(it,newCenter,s);
       });
       state.dragLabel={text:`${fmt(s*100)}%`, x:docP.x, y:docP.y};
-      renderObjects(); renderOverlay(); syncPropsLive();
+      drag.items.forEach(it=>renderObjectEl(it.o)); renderOverlay(); syncPropsLive();
     } else if(drag.mode==='nodeMove'){
       const lp=docPtToLocal(drag.o, {x:snap(docP.x), y:snap(docP.y)});
       const pts=pathPolyPoints(drag.o.d);
       pts[drag.idx]=lp;
       drag.o.d=polyToPathD(pts);
       drag.moved=true;
-      renderObjects(); renderOverlay();
+      renderObjectEl(drag.o); renderOverlay();
     } else if(drag.mode==='guideNewH'){
       drag.y=snap(docP.y);
       renderGuides({preview:{type:'h',val:drag.y}});
