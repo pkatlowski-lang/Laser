@@ -542,7 +542,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     selectedIds:[],
     tool:'select',
     snap:true, grid:10, showGrid:true,
-    penDraft:null, penPreview:null, guideLines:null,
+    penDraft:null, penPreview:null, guideLines:null, dragLabel:null,
     guides:{v:[],h:[]}, editingPathId:null,
     view:{x:-20,y:-20,w:340,h:240},
     params:[{id:'p_grubosc',name:'grubość_materiału',value:3,min:1,max:12,step:0.5}],
@@ -825,6 +825,18 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       : `<line x1="${fmt(v.x-pad)}" y1="${fmt(g.y)}" x2="${fmt(v.x+v.w+pad)}" y2="${fmt(g.y)}" class="guide-line"/>`
     ).join('');
   }
+  // dymek z wymiarami/pozycją/kątem pokazywany przy rysowaniu, przesuwaniu, skalowaniu i obracaniu
+  function dragLabelMarkup(){
+    const dl=state.dragLabel; if(!dl) return '';
+    const fs=state.view.w*0.024;
+    const padX=fs*0.6, padY=fs*0.4;
+    const w=dl.text.length*fs*0.58+padX*2, h=fs+padY*2;
+    const x=dl.x+fs*0.7, y=dl.y+fs*0.7;
+    return `<g class="drag-label" style="pointer-events:none">
+      <rect x="${fmt(x)}" y="${fmt(y)}" width="${fmt(w)}" height="${fmt(h)}" rx="${fmt(fs*0.25)}" fill="#1c1c1cdd" stroke="#d8a14a" stroke-width="${fmt(Math.max(fs*0.04,0.05))}"/>
+      <text x="${fmt(x+w/2)}" y="${fmt(y+h/2+fs*0.32)}" text-anchor="middle" font-size="${fmt(fs)}" font-family="sans-serif" fill="#fff">${escapeXml(dl.text)}</text>
+    </g>`;
+  }
   function renderOverlay(){
     if(state.penDraft){ renderPenDraft(); return; }              // tryb pióra: rysujemy szkic
     if(drag && drag.mode==='marquee') return;                   // marquee rysuje się sam
@@ -841,7 +853,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
         s+=`<circle data-node-idx="${i}" class="node-handle" cx="${fmt(p[0])}" cy="${fmt(p[1])}" r="${fmt(hit)}" fill="transparent"/>`;
         s+=`<circle class="node-handle-vis" cx="${fmt(p[0])}" cy="${fmt(p[1])}" r="${fmt(hr)}"/>`;
       });
-      gOverlay.innerHTML=s+guideLinesMarkup();
+      gOverlay.innerHTML=s+guideLinesMarkup()+dragLabelMarkup();
       return;
     }
     if(sel.length>1){                                           // wiele zaznaczonych: ramki + wspólny prostokąt, bez uchwytów
@@ -851,7 +863,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
         const b=objBBox(o), c={x:b.x+b.w/2,y:b.y+b.h/2};
         s+=`<g transform="rotate(${fmt(o.rotation||0)} ${fmt(c.x)} ${fmt(c.y)})"><rect class="sel-box" x="${fmt(b.x)}" y="${fmt(b.y)}" width="${fmt(b.w)}" height="${fmt(b.h)}" style="opacity:.55"/></g>`;
       });
-      s=`<rect x="${fmt(minx)}" y="${fmt(miny)}" width="${fmt(maxx-minx)}" height="${fmt(maxy-miny)}" fill="none" stroke="#d8a14a" stroke-width="1.6px" vector-effect="non-scaling-stroke"/>`+s+guideLinesMarkup();
+      s=`<rect x="${fmt(minx)}" y="${fmt(miny)}" width="${fmt(maxx-minx)}" height="${fmt(maxy-miny)}" fill="none" stroke="#d8a14a" stroke-width="1.6px" vector-effect="non-scaling-stroke"/>`+s+guideLinesMarkup()+dragLabelMarkup();
       gOverlay.innerHTML=s; return;
     }
     const o=sel[0];
@@ -871,7 +883,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       s+=`<rect class="sel-handle" x="${fmt(hx-hr)}" y="${fmt(hy-hr)}" width="${fmt(hr*2)}" height="${fmt(hr*2)}" style="pointer-events:none"/>`;
       s+=`<rect x="${fmt(hx-hit)}" y="${fmt(hy-hit)}" width="${fmt(hit*2)}" height="${fmt(hit*2)}" fill="transparent" data-handle="${k}"/>`;
     });
-    s+=`</g>`+guideLinesMarkup();
+    s+=`</g>`+guideLinesMarkup()+dragLabelMarkup();
     gOverlay.innerHTML=s;
   }
 
@@ -1404,6 +1416,8 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
         state.guideLines=guides;
         drag.items.forEach(it=>{ it.o.x=it.ox+dx; it.o.y=it.oy+dy; });
       }
+      const mb=objBBox(drag.o);
+      state.dragLabel={text:`X: ${fmt(mb.x)}  Y: ${fmt(mb.y)} mm`, x:docP.x, y:docP.y};
       renderObjects(); renderOverlay(); syncPropsLive();
     } else if(drag.mode==='marquee'){
       const x=Math.min(drag.x0,docP.x), y=Math.min(drag.y0,docP.y), w=Math.abs(docP.x-drag.x0), h=Math.abs(docP.y-drag.y0);
@@ -1413,15 +1427,20 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       const o=drag.o; let x0=drag.ax,y0=drag.ay,x1=snap(docP.x),y1=snap(docP.y);
       if(o.type==='line'){ o.x=x0;o.y=y0;o.w=x1-x0;o.h=y1-y0; }
       else { o.x=Math.min(x0,x1); o.y=Math.min(y0,y1); o.w=Math.abs(x1-x0); o.h=Math.abs(y1-y0); }
+      const dw=o.type==='line'?Math.abs(o.w):o.w, dh=o.type==='line'?Math.abs(o.h):o.h;
+      state.dragLabel={text:`${fmt(dw)} × ${fmt(dh)} mm`, x:docP.x, y:docP.y};
       renderObjects(); renderOverlay();
     } else if(drag.mode==='rotate'){
       const ang=Math.atan2(docP.y-drag.c.y,docP.x-drag.c.x);
       let deg=drag.startAng+(ang-drag.startMouse)*180/Math.PI;
       if(e.shiftKey) deg=Math.round(deg/15)*15;
       drag.o.rotation=((deg%360)+360)%360;
+      state.dragLabel={text:`${fmt(drag.o.rotation)}°`, x:docP.x, y:docP.y};
       renderObjects(); renderOverlay(); syncPropsLive();
     } else if(drag.mode==='resize'){
       doResize(drag,docP,e.shiftKey);
+      const rb=objBBox(drag.o);
+      state.dragLabel={text:`${fmt(rb.w)} × ${fmt(rb.h)} mm`, x:docP.x, y:docP.y};
       renderObjects(); renderOverlay(); syncPropsLive();
     } else if(drag.mode==='nodeMove'){
       const lp=docPtToLocal(drag.o, {x:snap(docP.x), y:snap(docP.y)});
@@ -1457,6 +1476,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       drag=null; renderOverlay(); renderLayers(); renderProps(); return;
     }
     const m=drag.mode, o=drag.o;
+    state.dragLabel=null;
     if(m==='draw'){
       if(o.type!=='line' && o.w<2 && o.h<2){ // treated as click -> default size centered
         const s=40; o.w=s; o.h=s; o.x=snap(o.x-s/2); o.y=snap(o.y-s/2);
@@ -1465,7 +1485,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       state.tool='select'; syncToolButtons();
       renderAll(); pushHistory(); renderProps();
     } else if(m==='move'||m==='resize'||m==='rotate'){
-      if(state.guideLines){ state.guideLines=null; renderOverlay(); }
+      state.guideLines=null; renderOverlay();
       pushHistory(); renderProps(); scheduleLive3D();
     } else if(m==='nodeMove'){
       if(drag.moved){ recalcPathBBox(o); nodeClickInfo=null; pushHistory(); renderAll(); renderProps(); scheduleLive3D(); }
@@ -1487,7 +1507,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   window.addEventListener('pointercancel', e=>{
     pointers.delete(e.pointerId); if(pointers.size<2) pinch=null;
     if(drag&&(drag.mode==='guideNewH'||drag.mode==='guideNewV'||drag.mode==='guideMove')) renderGuides();
-    drag=null; if(state.guideLines){ state.guideLines=null; renderOverlay(); }
+    drag=null; state.guideLines=null; state.dragLabel=null; renderOverlay();
   });
 
   function doResize(d,docP,shift){
