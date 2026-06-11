@@ -208,6 +208,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
 /* ---- 3D Preview modal ---- */
 .preview3d-wrap{perspective:1200px;background:radial-gradient(ellipse 70% 55% at 50% 58%,#12122a 0%,#040408 100%);border-radius:12px;height:430px;display:flex;align-items:center;justify-content:center;cursor:grab;overflow:hidden;user-select:none;margin:12px 0}
 .preview3d-wrap.p3d-dragging{cursor:grabbing}
+.preview3d-wrap.p3d-panning{cursor:move}
 .preview3d-scene{transform-style:preserve-3d;position:relative}
 .p3d-layer{position:absolute;top:0;left:0;transform-style:preserve-3d}
 .p3d-layer svg{display:block}
@@ -233,6 +234,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
 .zoom-badge{font-size:.7rem;font-weight:700;color:var(--muted);background:var(--surface2);border:1.5px solid var(--border);border-radius:6px;padding:4px 8px;min-width:42px;text-align:center}
 .live3d-stage{flex:1;perspective:1100px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:radial-gradient(ellipse 65% 60% at 50% 58%,#171738 0%,#05050b 100%);cursor:grab}
 .live3d-stage.l3d-dragging{cursor:grabbing}
+.live3d-stage.l3d-panning{cursor:move}
 .live3d-scene{transform-style:preserve-3d;position:relative}
 .l3d-layer{position:absolute;top:0;left:0;transform-style:preserve-3d}
 .l3d-layer svg{display:block}
@@ -312,6 +314,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       <button class="tbtn" id="preview3dBtn" title="Podgląd 3D — interaktywna wizualizacja projektu jako stos warstw materiału">🎯 Podgląd 3D</button>
       <button class="tbtn" id="boxGenBtn" title="Generator pudełka — parametryczne pudełko z łączeniami „na palec”, gotowe do wycięcia laserem">📦 Generator pudełka</button>
       <button class="tbtn" id="hingeGenBtn" title="Generator zawiasu — wzór nacięć (living hinge), który pozwala wygiąć sztywny materiał">🪗 Zawias żywy</button>
+      <button class="tbtn" id="gearGenBtn" title="Generator koła zębatego — parametryczne koło zębatego (ewolwentowe) z otworem na oś, gotowe do wycięcia laserem">⚙ Koło zębate</button>
       <button class="tbtn" id="exportBtn" style="background:linear-gradient(135deg,var(--accent),var(--accent-dark));border-color:var(--accent);color:#1a1308">⬇ Pobierz SVG</button>
       <button class="tbtn" id="exportDxfBtn" title="Eksportuj projekt jako plik DXF (do programów CNC/laser, np. LightBurn, AutoCAD)">⬇ Pobierz DXF</button>
       <button class="tbtn" id="export3dBtn" title="Eksport 3D — pobierz osobne SVG dla każdej warstwy głębokości i sklejaj je, by uzyskać efekt 3D">🧊 Eksport 3D</button>
@@ -401,7 +404,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     <div class="bb-sec">
       <div class="bb-head"><span>🧊 Wizualizacja 3D — stos warstw materiału</span>
         <span class="bb-spacer"></span>
-        <span class="zoom-badge" id="live3dZoomLabel" title="Przybliżenie (kółko myszy = zoom w miejscu kursora)">100%</span>
+        <span class="zoom-badge" id="live3dZoomLabel" title="Przybliżenie — kółko myszy = zoom w miejscu kursora, przeciągnij = obróć, Shift+przeciągnij lub prawy przycisk = przesuń widok">100%</span>
         <button class="bb-btn" id="live3dZoomReset" title="Zresetuj przybliżenie">⟲ 100%</button>
         <button class="bb-btn" id="live3dExpand" title="Powiększ na cały ekran">⛶ Powiększ</button>
       </div>
@@ -426,13 +429,13 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     <h3>🎯 Wizualizacja 3D projektu</h3>
     <div class="p3d-controls">Grubości warstw ustawiasz w mm w panelu „Warstwy 3D” po lewej — model 3D odwzorowuje je proporcjonalnie.
       <span class="bb-spacer"></span>
-      <span class="zoom-badge" id="p3dZoomLabel" title="Przybliżenie (kółko myszy = zoom w miejscu kursora)">100%</span>
+      <span class="zoom-badge" id="p3dZoomLabel" title="Przybliżenie — kółko myszy = zoom w miejscu kursora, przeciągnij = obróć, Shift+przeciągnij lub prawy przycisk = przesuń widok">100%</span>
       <button class="bb-btn" id="p3dZoomReset" title="Zresetuj przybliżenie i obrót">⟲ Reset widoku</button>
     </div>
     <div class="preview3d-wrap" id="p3dWrap">
       <div class="preview3d-scene" id="p3dScene"></div>
     </div>
-    <p style="font-size:.72rem;color:var(--muted);text-align:center;margin-top:8px">Przeciągnij aby obrócić · kółko myszy = przybliż / oddal w miejscu kursora · podwójne kliknięcie = reset widoku · każdy kolor = osobna warstwa materiału</p>
+    <p style="font-size:.72rem;color:var(--muted);text-align:center;margin-top:8px">Przeciągnij aby obrócić · Shift+przeciągnij lub prawy przycisk = przesuń widok · kółko myszy = przybliż / oddal w miejscu kursora · podwójne kliknięcie = reset widoku · każdy kolor = osobna warstwa materiału</p>
   </div>
 </div>
 
@@ -485,6 +488,20 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     <div class="field"><label>Odstęp pionowy między rzędami (mm)</label><input type="number" id="hingePitchY" min="1" max="100" step="0.5" value="4"></div>
     <div class="field"><label>Margines (mm)</label><input type="number" id="hingeMargin" min="0" max="100" step="1" value="5"></div>
     <button type="button" class="tbtn" id="hingeGenerateBtn" style="width:100%;justify-content:center;margin-top:6px">Generuj zawias</button>
+  </div>
+</div>
+
+<div class="modal-ov" id="modalGear">
+  <div class="modal-box" style="max-width:420px">
+    <button class="modal-close" id="modalGearClose" title="Zamknij">✕</button>
+    <h3>⚙ Generator koła zębatego</h3>
+    <p style="font-size:.8rem;color:var(--muted);margin:0 0 8px">Wygeneruj parametryczne koło zębate (zarys ewolwentowy) z opcjonalnym otworem na oś — gotowe do wycięcia laserem.</p>
+    <div class="field"><label>Liczba zębów</label><input type="number" id="gearTeeth" min="6" max="200" step="1" value="20"></div>
+    <div class="field"><label>Moduł (mm)</label><input type="number" id="gearModule" min="0.2" max="20" step="0.1" value="2"></div>
+    <div class="field"><label>Kąt przyporu (°)</label><input type="number" id="gearPressure" min="10" max="30" step="1" value="20"></div>
+    <div class="field"><label>Średnica otworu osi (mm, 0 = brak)</label><input type="number" id="gearBore" min="0" max="200" step="0.5" value="6"></div>
+    <p id="gearInfo" style="font-size:.78rem;color:var(--muted);margin:0 0 8px"></p>
+    <button type="button" class="tbtn" id="gearGenerateBtn" style="width:100%;justify-content:center;margin-top:6px">Generuj koło zębate</button>
   </div>
 </div>
 
@@ -3128,10 +3145,18 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     bbSvgEl.innerHTML = r ? r.svg : '<div class="bb-empty">Dodaj elementy — tu pojawi się plik z rozdzielonymi warstwami</div>';
   }
 
-  live3dStage.addEventListener('pointerdown',e=>{ liveDrag={sx:e.clientX,sy:e.clientY,rx:liveRot.x,rz:liveRot.z}; live3dStage.classList.add('l3d-dragging'); live3dStage.setPointerCapture(e.pointerId); });
+  live3dStage.addEventListener('contextmenu',e=>e.preventDefault());
+  live3dStage.addEventListener('pointerdown',e=>{
+    const pan=e.button===2||e.shiftKey;
+    liveDrag={pan,sx:e.clientX,sy:e.clientY,rx:liveRot.x,rz:liveRot.z,zx:liveZoom.x,zy:liveZoom.y};
+    live3dStage.classList.toggle('l3d-panning',pan);
+    live3dStage.classList.add('l3d-dragging'); live3dStage.setPointerCapture(e.pointerId);
+  });
   live3dStage.addEventListener('pointermove',e=>{ if(!liveDrag) return; const dx=e.clientX-liveDrag.sx, dy=e.clientY-liveDrag.sy;
-    liveRot.x=Math.max(5,Math.min(88,liveDrag.rx-dy*0.4)); liveRot.z=liveDrag.rz+dx*0.4; applyLiveRot(); });
-  live3dStage.addEventListener('pointerup',()=>{ liveDrag=null; live3dStage.classList.remove('l3d-dragging'); });
+    if(liveDrag.pan){ liveZoom.x=liveDrag.zx+dx; liveZoom.y=liveDrag.zy+dy; }
+    else { liveRot.x=Math.max(5,Math.min(88,liveDrag.rx-dy*0.4)); liveRot.z=liveDrag.rz+dx*0.4; }
+    applyLiveRot(); });
+  live3dStage.addEventListener('pointerup',()=>{ liveDrag=null; live3dStage.classList.remove('l3d-dragging','l3d-panning'); });
   live3dStage.addEventListener('wheel',e=>{ e.preventDefault(); zoomAtPoint(liveZoom, live3dScene, e.clientX, e.clientY, e.deltaY); applyLiveRot(); },{passive:false});
   live3dStage.addEventListener('dblclick',()=>{ liveZoom={scale:1,x:0,y:0}; applyLiveRot(); });
   document.getElementById('live3dZoomReset').addEventListener('click',()=>{ liveZoom={scale:1,x:0,y:0}; applyLiveRot(); });
@@ -3160,11 +3185,18 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   }
 
   const p3dWrap=document.getElementById('p3dWrap');
-  p3dWrap.addEventListener('pointerdown',e=>{ p3dDrag={sx:e.clientX,sy:e.clientY,rx:p3dRot.x,rz:p3dRot.z}; p3dWrap.classList.add('p3d-dragging'); p3dWrap.setPointerCapture(e.pointerId); });
+  p3dWrap.addEventListener('contextmenu',e=>e.preventDefault());
+  p3dWrap.addEventListener('pointerdown',e=>{
+    const pan=e.button===2||e.shiftKey;
+    p3dDrag={pan,sx:e.clientX,sy:e.clientY,rx:p3dRot.x,rz:p3dRot.z,zx:p3dZoom.x,zy:p3dZoom.y};
+    p3dWrap.classList.toggle('p3d-panning',pan);
+    p3dWrap.classList.add('p3d-dragging'); p3dWrap.setPointerCapture(e.pointerId);
+  });
   p3dWrap.addEventListener('pointermove',e=>{ if(!p3dDrag) return; const dx=e.clientX-p3dDrag.sx, dy=e.clientY-p3dDrag.sy;
-    p3dRot.x=Math.max(5,Math.min(88,p3dDrag.rx-dy*0.42)); p3dRot.z=p3dDrag.rz+dx*0.42;
-    applyP3DTransform(); });
-  p3dWrap.addEventListener('pointerup',()=>{ p3dDrag=null; p3dWrap.classList.remove('p3d-dragging'); });
+    if(p3dDrag.pan){ p3dZoom.x=p3dDrag.zx+dx; p3dZoom.y=p3dDrag.zy+dy; applyP3DTransform(); }
+    else { p3dRot.x=Math.max(5,Math.min(88,p3dDrag.rx-dy*0.42)); p3dRot.z=p3dDrag.rz+dx*0.42; applyP3DTransform(); }
+  });
+  p3dWrap.addEventListener('pointerup',()=>{ p3dDrag=null; p3dWrap.classList.remove('p3d-dragging','p3d-panning'); });
   p3dWrap.addEventListener('wheel',e=>{ e.preventDefault(); zoomAtPoint(p3dZoom, p3dScene, e.clientX, e.clientY, e.deltaY); applyP3DTransform(); },{passive:false});
   p3dWrap.addEventListener('dblclick',()=>{ p3dRot={x:54,z:-24}; p3dZoom={scale:1,x:0,y:0}; applyP3DTransform(); });
   document.getElementById('p3dZoomReset').addEventListener('click',()=>{ p3dRot={x:54,z:-24}; p3dZoom={scale:1,x:0,y:0}; applyP3DTransform(); });
