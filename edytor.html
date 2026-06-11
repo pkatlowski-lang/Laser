@@ -310,6 +310,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       <button class="tbtn" id="loadFontsBtn" title="Wczytaj czcionki zainstalowane na komputerze (Chrome/Edge)">🔤 Czcionki z PC</button>
       <button class="tbtn" id="depthViewBtn" title="Tryb warstw 3D — pokoloruj elementy według warstwy głębokości (kliknij ponownie aby wyłączyć)">🎨 Warstwy</button>
       <button class="tbtn" id="preview3dBtn" title="Podgląd 3D — interaktywna wizualizacja projektu jako stos warstw materiału">🎯 Podgląd 3D</button>
+      <button class="tbtn" id="boxGenBtn" title="Generator pudełka — parametryczne pudełko z łączeniami „na palec”, gotowe do wycięcia laserem">📦 Generator pudełka</button>
       <button class="tbtn" id="exportBtn" style="background:linear-gradient(135deg,var(--accent),var(--accent-dark));border-color:var(--accent);color:#1a1308">⬇ Pobierz SVG</button>
       <button class="tbtn" id="exportDxfBtn" title="Eksportuj projekt jako plik DXF (do programów CNC/laser, np. LightBurn, AutoCAD)">⬇ Pobierz DXF</button>
       <button class="tbtn" id="export3dBtn" title="Eksport 3D — pobierz osobne SVG dla każdej warstwy głębokości i sklejaj je, by uzyskać efekt 3D">🧊 Eksport 3D</button>
@@ -456,6 +457,20 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   </div>
 </div>
 
+<div class="modal-ov" id="modalBox">
+  <div class="modal-box" style="max-width:420px">
+    <button class="modal-close" id="modalBoxClose" title="Zamknij">✕</button>
+    <h3>📦 Generator pudełka</h3>
+    <p style="font-size:.8rem;color:var(--muted);margin:0 0 8px">Wygeneruj 5 ścianek pudełka (otwartego od góry) z łączeniami „na palec” — wsuwają się w siebie i są gotowe do wycięcia laserem.</p>
+    <div class="field"><label>Szerokość — W (mm)</label><input type="number" id="boxW" min="10" max="2000" step="1" value="120"></div>
+    <div class="field"><label>Głębokość — D (mm)</label><input type="number" id="boxD" min="10" max="2000" step="1" value="80"></div>
+    <div class="field"><label>Wysokość — H (mm)</label><input type="number" id="boxH" min="10" max="2000" step="1" value="60"></div>
+    <div class="field"><label>Grubość materiału — T (mm)</label><input type="number" id="boxT" min="0.5" max="20" step="0.5" value="3"></div>
+    <div class="field"><label>Rozmiar palca (mm)</label><input type="number" id="boxF" min="2" max="100" step="1" value="15"></div>
+    <button type="button" class="tbtn" id="boxGenerateBtn" style="width:100%;justify-content:center;margin-top:6px">Generuj pudełko</button>
+  </div>
+</div>
+
 <div class="modal-ov" id="modalHelp">
   <div class="modal-box" style="max-width:680px">
     <button class="modal-close" id="modalHelpClose" title="Zamknij">✕</button>
@@ -500,6 +515,11 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
         <div class="sc-row"><span>Dopasuj cały arkusz</span><span class="sc-keys"><kbd>1</kbd></span></div>
         <div class="sc-row"><span>Przybliż do zaznaczenia</span><span class="sc-keys"><kbd>2</kbd></span></div>
         <div class="sc-row"><span>Pokaż tę pomoc</span><span class="sc-keys"><kbd>?</kbd></span></div>
+      </div>
+      <div class="sc-group">
+        <h4>Pole liczbowe / suwak</h4>
+        <div class="sc-row"><span>Zmień wartość o krok</span><span class="sc-keys"><kbd>Scroll</kbd></span></div>
+        <div class="sc-row"><span>Zmień wartość o krok ×10</span><span class="sc-keys"><kbd>Shift</kbd>+<kbd>Scroll</kbd></span></div>
       </div>
       <div class="sc-group">
         <h4>Zaznaczenie i ruch</h4>
@@ -3426,6 +3446,72 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     const objs=t.build(); objs.forEach(o=>{o.id=uid();}); state.objects.push(...objs); state.selectedIds=[objs[objs.length-1].id];
     pushHistory(); renderAll(); renderProps(); zoomFit();
   }); tplEl.appendChild(b); });
+
+  /* ---------------- Generator pudełka (łączenia „na palec”) ---------------- */
+  // Punkty jednej krawędzi długości L: naprzemienne segmenty wystają na zewnątrz o `t`
+  // (palec) albo zostają przy krawędzi (0). `tabsFirst` ustala fazę — sąsiednia ścianka
+  // używa odwrotnej fazy, dzięki czemu palce jednej wsuwają się w przerwy drugiej.
+  function fingerEdgePoints(L,t,f,tabsFirst){
+    let n=Math.max(1,Math.round(L/f));
+    if(n%2===0) n+=1;
+    const seg=L/n, offAt=i=>((i%2===0)===tabsFirst)?t:0;
+    const pts=[[0,offAt(0)]];
+    for(let i=0;i<n;i++){
+      const off=offAt(i), next=i+1<n?offAt(i+1):off;
+      pts.push([(i+1)*seg,off]);
+      if(next!==off) pts.push([(i+1)*seg,next]);
+    }
+    return pts;
+  }
+  // Kontur jednej ścianki w lokalnym układzie 0..w x 0..h. edges.{top,right,bottom,left}:
+  // true/false = krawędź z palcami (faza), null = krawędź prosta (bez łączenia, np. góra otwartego pudełka).
+  function boxPanelPoints(w,h,t,f,edges){
+    const pts=[];
+    const add=(x,y)=>{ const last=pts[pts.length-1]; if(!last||Math.abs(last[0]-x)>1e-6||Math.abs(last[1]-y)>1e-6) pts.push([x,y]); };
+    if(edges.top==null){ add(0,0); add(w,0); } else fingerEdgePoints(w,t,f,edges.top).forEach(([al,off])=>add(al,-off));
+    if(edges.right==null){ add(w,0); add(w,h); } else fingerEdgePoints(h,t,f,edges.right).forEach(([al,off])=>add(w+off,al));
+    if(edges.bottom==null){ add(w,h); add(0,h); } else fingerEdgePoints(w,t,f,edges.bottom).forEach(([al,off])=>add(w-al,h+off));
+    if(edges.left==null){ add(0,h); add(0,0); } else fingerEdgePoints(h,t,f,edges.left).forEach(([al,off])=>add(-off,h-al));
+    return pts;
+  }
+  // 5 ścianek pudełka (otwartego od góry) ułożonych obok siebie w gotowym do cięcia rozkroju.
+  function buildFingerBox(W,D,H,T,F){
+    const g=Math.max(T*2,5);
+    const x0=0, x1=H+g, x2=H+g+W+g, y0=0, y1=H+g, y2=H+g+D+g;
+    const panels=[
+      {name:'Tył',   w:W,h:H, x:x1,y:y0, edges:{top:null,  right:true,  bottom:false, left:true }},
+      {name:'Lewa',  w:H,h:D, x:x0,y:y1, edges:{top:false, right:false, bottom:false, left:null }},
+      {name:'Dół',   w:W,h:D, x:x1,y:y1, edges:{top:true,  right:true,  bottom:true,  left:true }},
+      {name:'Prawa', w:H,h:D, x:x2,y:y1, edges:{top:false, right:null,  bottom:false, left:false}},
+      {name:'Przód', w:W,h:H, x:x1,y:y2, edges:{top:false, right:true,  bottom:null,  left:true }}
+    ];
+    return panels.map(p=>{
+      const pts=boxPanelPoints(p.w,p.h,T,F,p.edges).map(([x,y])=>[x+p.x,y+p.y]);
+      const bb=polysBBoxMulti([pts]);
+      return {name:p.name, d:polyToPathD(pts), bx:bb.minx, by:bb.miny, bw:Math.max(1,bb.maxx-bb.minx), bh:Math.max(1,bb.maxy-bb.miny)};
+    });
+  }
+  const modalBox=document.getElementById('modalBox');
+  document.getElementById('boxGenBtn').addEventListener('click',()=>modalBox.classList.add('open'));
+  document.getElementById('modalBoxClose').addEventListener('click',()=>modalBox.classList.remove('open'));
+  modalBox.addEventListener('click',e=>{ if(e.target===modalBox) modalBox.classList.remove('open'); });
+  document.getElementById('boxGenerateBtn').addEventListener('click',()=>{
+    const W=clamp(Number(document.getElementById('boxW').value)||120,10,2000);
+    const D=clamp(Number(document.getElementById('boxD').value)||80,10,2000);
+    const H=clamp(Number(document.getElementById('boxH').value)||60,10,2000);
+    const T=clamp(Number(document.getElementById('boxT').value)||3,0.5,20);
+    const F=clamp(Number(document.getElementById('boxF').value)||15,2,100);
+    const panels=buildFingerBox(W,D,H,T,F);
+    const newObjs=panels.map(p=>({id:uid(),type:'path',name:p.name,d:p.d,fillRule:'nonzero',
+      bx:p.bx,by:p.by,bw:p.bw,bh:p.bh,x:0,y:0,rotation:0,mode:'cut',visible:true,locked:false,depth:state.depth||1,repeat:{type:'none'}}));
+    const totalBB=polysBBoxMulti(panels.map(p=>[[p.bx,p.by],[p.bx+p.bw,p.by+p.bh]]));
+    if(totalBB.maxx>state.docW || totalBB.maxy>state.docH){
+      applyDocSize(Math.max(state.docW,Math.ceil(totalBB.maxx+5)), Math.max(state.docH,Math.ceil(totalBB.maxy+5)));
+    }
+    state.objects.push(...newObjs); state.selectedIds=newObjs.map(o=>o.id);
+    pushHistory(); renderAll(); renderProps(); zoomFit();
+    modalBox.classList.remove('open');
+  });
 
   /* ---------------- Gallery of bases ---------------- */
 
