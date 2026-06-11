@@ -40,7 +40,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 .panel h2{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:14px 16px 8px;font-weight:700}
 .stage{flex:1;position:relative;min-width:0;min-height:260px;background:
   repeating-linear-gradient(45deg,#0f0b06 0 10px,#120d07 10px 20px)}
-#canvas{position:absolute;top:20px;right:0;bottom:0;left:22px;width:auto;height:auto;touch-action:none}
+#canvas{position:absolute;top:20px;right:0;bottom:0;left:22px;width:auto;height:auto;touch-action:none;user-select:none;-webkit-user-select:none}
+/* blokada natywnego zaznaczania tekstu przeglądarki na płótnie — bez tego przeciąganie
+   po napisie "podświetlało" litery na niebiesko i otwierało systemowe menu zaznaczenia */
+#canvas *{user-select:none;-webkit-user-select:none}
+#canvas text{pointer-events:bounding-box;cursor:move}
 .stage .hint-empty{position:absolute;left:calc(50% + 11px);top:34px;transform:translateX(-50%);font-size:.8rem;color:var(--muted);background:rgba(0,0,0,.35);padding:6px 12px;border-radius:100px;pointer-events:none}
 
 /* ---- Linijki (rulery) wzdłuż krawędzi płótna ---- */
@@ -68,6 +72,18 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 .text-toolbar .tbtn{height:30px;min-width:30px;padding:0 9px}
 .text-toolbar .tbtn.active{background:var(--accent);border-color:var(--accent);color:#1a1308}
 .tt-sep{width:1px;height:22px;background:var(--border)}
+
+/* ---- Rozwijana lista czcionek z podglądem na żywo (najechanie = podgląd, klik = wybór) ---- */
+.font-dd{position:relative;min-width:150px}
+.font-dd-btn{width:100%;text-align:left;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:.85rem;padding:5px 8px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.font-dd-btn:hover{border-color:var(--accent)}
+.font-dd-list{display:none;position:absolute;left:0;right:0;top:calc(100% + 3px);z-index:1200;max-height:280px;overflow-y:auto;background:var(--surface2);border:1px solid var(--border);border-radius:8px;box-shadow:0 10px 28px rgba(0,0,0,.55)}
+.font-dd.open .font-dd-list{display:block}
+.font-dd-item{padding:7px 10px;cursor:pointer;font-size:1.02rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.font-dd-item:hover{background:var(--accent);color:#1a1308}
+.font-dd-item.cur{background:rgba(216,161,74,.18)}
+.font-dd-item .pc{font-family:var(--font-b);font-size:.68rem;color:var(--muted)}
+.font-dd-item:hover .pc{color:#1a1308}
 
 /* canvas geometry styling */
 .doc-bg{fill:#e8d9b8}
@@ -330,16 +346,15 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       <div class="field">
         <label>Rozmiar arkusza (mm) — szer. × wys.</label>
         <div class="row2">
-          <input type="number" id="docWInput" min="10" max="3000" step="1" title="Szerokość arkusza (mm)">
-          <input type="number" id="docHInput" min="10" max="3000" step="1" title="Wysokość arkusza (mm)">
+          <input type="number" id="docWInput" min="10" max="760" step="1" title="Szerokość arkusza (mm) — maks. 760">
+          <input type="number" id="docHInput" min="10" max="760" step="1" title="Wysokość arkusza (mm) — maks. 760">
         </div>
         <select id="docPreset" class="bind-sel">
           <option value="">— gotowe rozmiary —</option>
           <option value="300x200">300 × 200 mm</option>
           <option value="400x300">400 × 300 mm</option>
           <option value="600x400">600 × 400 mm</option>
-          <option value="900x600">900 × 600 mm</option>
-          <option value="1200x900">1200 × 900 mm</option>
+          <option value="760x760">760 × 760 mm (maks.)</option>
           <option value="297x210">A4 — 297 × 210 mm</option>
           <option value="420x297">A3 — 420 × 297 mm</option>
         </select>
@@ -350,6 +365,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
           <input type="number" id="gridSizeInput" min="0.5" max="500" step="0.5" title="Odstęp linii siatki (mm)">
           <label class="check-label"><input type="checkbox" id="gridShowInput"> Pokaż siatkę</label>
         </div>
+        <label class="check-label" title="Wyłączone = elementy można stawiać i przesuwać płynnie, w dowolnym miejscu"><input type="checkbox" id="snapInput"> Przyciągaj do siatki</label>
       </div>
       <h2>Parametry globalne</h2>
       <div class="params" id="params"></div>
@@ -376,7 +392,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
 
     <section class="stage">
       <div class="text-toolbar" id="textToolbar">
-        <select id="ttFont" title="Czcionka"></select>
+        <div class="font-dd" id="ttFontDD" title="Czcionka — najedź na nazwę, aby zobaczyć podgląd"></div>
         <input type="number" id="ttSize" min="4" max="400" step="1" title="Wielkość czcionki (mm)">
         <span class="tt-sep"></span>
         <button type="button" class="tbtn" id="ttBold" title="Pogrubienie"><b>B</b></button>
@@ -480,12 +496,12 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     <button class="modal-close" id="modalHingeClose" title="Zamknij">✕</button>
     <h3>🪗 Generator zawiasu (living hinge)</h3>
     <p style="font-size:.8rem;color:var(--muted);margin:0 0 8px">Wygeneruj panel z siatką krótkich nacięć w układzie cegiełek — pozwala wygiąć sztywny materiał (sklejkę, akryl) w łuk.</p>
-    <div class="field"><label>Szerokość panelu (mm)</label><input type="number" id="hingeW" min="10" max="2000" step="1" value="100"></div>
-    <div class="field"><label>Wysokość panelu (mm)</label><input type="number" id="hingeH" min="10" max="2000" step="1" value="60"></div>
-    <div class="field"><label>Długość nacięcia (mm)</label><input type="number" id="hingeLen" min="2" max="200" step="1" value="8"></div>
-    <div class="field"><label>Szerokość nacięcia — kerf (mm)</label><input type="number" id="hingeKerf" min="0.2" max="5" step="0.1" value="1"></div>
-    <div class="field"><label>Odstęp poziomy między nacięciami (mm)</label><input type="number" id="hingePitchX" min="1" max="100" step="0.5" value="4"></div>
-    <div class="field"><label>Odstęp pionowy między rzędami (mm)</label><input type="number" id="hingePitchY" min="1" max="100" step="0.5" value="4"></div>
+    <div class="field"><label>Szerokość panelu (mm)</label><input type="number" id="hingeW" min="10" max="760" step="1" value="100"></div>
+    <div class="field"><label>Wysokość panelu (mm)</label><input type="number" id="hingeH" min="10" max="760" step="1" value="60"></div>
+    <div class="field"><label>Długość nacięcia (mm)</label><input type="number" id="hingeLen" min="5" max="200" step="1" value="20"></div>
+    <div class="field"><label>Szerokość nacięcia — kerf (mm)</label><input type="number" id="hingeKerf" min="0.2" max="5" step="0.1" value="0.5"></div>
+    <div class="field"><label>Odstęp między kolumnami nacięć (mm)</label><input type="number" id="hingePitchX" min="1" max="100" step="0.5" value="3"></div>
+    <div class="field"><label>Mostek — przerwa między nacięciami w kolumnie (mm)</label><input type="number" id="hingePitchY" min="1" max="100" step="0.5" value="3"></div>
     <div class="field"><label>Margines (mm)</label><input type="number" id="hingeMargin" min="0" max="100" step="1" value="5"></div>
     <button type="button" class="tbtn" id="hingeGenerateBtn" style="width:100%;justify-content:center;margin-top:6px">Generuj zawias</button>
   </div>
@@ -593,6 +609,51 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     }catch(e){ alert('Nie udało się wczytać czcionek z komputera: '+e.message); }
   }
 
+  /* ---- Rozwijana lista czcionek z PODGLĄDEM NA ŻYWO: najechanie na nazwę od razu
+     przełącza czcionkę zaznaczonego napisu (bez klikania), kliknięcie zatwierdza wybór,
+     zamknięcie listy bez kliknięcia przywraca pierwotną czcionkę. ---- */
+  function fontDDMarkup(cur){
+    const all=availableFonts();
+    const curLabel=(all.find(f=>f[0]===cur)||[cur,String(cur||'').replace(/"/g,'')])[1];
+    const items=all.map(([v,l])=>`<div class="font-dd-item${v===cur?' cur':''}" data-font="${escapeXml(v)}" style="font-family:${escapeXml(v)}">${escapeXml(l)}${localFonts.some(f=>f[0]===v)?' <span class="pc">• PC</span>':''}</div>`).join('');
+    return `<button type="button" class="font-dd-btn" style="font-family:${escapeXml(cur||'inherit')}">${escapeXml(curLabel)} ▾</button><div class="font-dd-list">${items}</div>`;
+  }
+  function bindFontDD(dd, getObj, onCommit){
+    let orig=null;                 // czcionka sprzed otwarcia listy — do przywrócenia, gdy podgląd nie zostanie zatwierdzony
+    const preview=f=>{ const o=getObj(); if(!o) return; o.font=f; renderObjects(); renderOverlay(); };
+    const close=(restore)=>{ dd.classList.remove('open'); if(restore && orig!=null) preview(orig); orig=null; };
+    dd.addEventListener('click',e=>{
+      const it=e.target.closest('.font-dd-item');
+      if(it){
+        e.stopPropagation();
+        const o=getObj(); if(!o){ close(false); return; }
+        o.font=it.getAttribute('data-font'); orig=null;
+        dd.classList.remove('open');
+        dd.innerHTML=fontDDMarkup(o.font);
+        onCommit&&onCommit(o);
+        return;
+      }
+      if(e.target.closest('.font-dd-btn')){
+        e.stopPropagation();
+        const o=getObj(); if(!o) return;
+        if(dd.classList.contains('open')){ close(true); return; }
+        orig=o.font;
+        dd.classList.add('open');
+        const curIt=dd.querySelector('.font-dd-item.cur'); if(curIt) curIt.scrollIntoView({block:'center'});
+      }
+    });
+    dd.addEventListener('mouseover',e=>{
+      if(!dd.classList.contains('open')) return;
+      const it=e.target.closest('.font-dd-item');
+      if(it) preview(it.getAttribute('data-font'));
+    });
+    dd.addEventListener('mouseleave',()=>{ if(dd.classList.contains('open') && orig!=null) preview(orig); });
+    dd._fontDDClose=()=>close(true);   // zamykanie kliknięciem poza listą obsługuje JEDEN globalny nasłuchiwacz (poniżej)
+  }
+  document.addEventListener('pointerdown',e=>{
+    document.querySelectorAll('.font-dd.open').forEach(dd=>{ if(!dd.contains(e.target) && dd._fontDDClose) dd._fontDDClose(); });
+  });
+
   function fmt(n){ return Number(Number(n).toFixed(3)); }
   function uid(){ return 'o'+Math.random().toString(36).slice(2,9); }
   function puid(){ return 'p'+Math.random().toString(36).slice(2,8); }
@@ -607,7 +668,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     objects:[],
     selectedIds:[],
     tool:'select',
-    snap:true, grid:1, showGrid:true,
+    snap:false, grid:1, showGrid:true,   // przyciąganie do siatki domyślnie WYŁĄCZONE — płynne ustawianie elementów w dowolnym miejscu
     penDraft:null, penPreview:null, guideLines:null, dragLabel:null,
     guides:{v:[],h:[]}, editingPathId:null,
     view:{x:-20,y:-20,w:340,h:240},
@@ -942,7 +1003,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
         const bx=Math.min(b.x,b.x+b.w), by=Math.min(b.y,b.y+b.h), bw=Math.abs(b.w), bh=Math.abs(b.h);
         s+=`<g transform="rotate(${fmt(o.rotation||0)} ${fmt(c.x)} ${fmt(c.y)})"><rect class="sel-box" x="${fmt(bx)}" y="${fmt(by)}" width="${fmt(bw)}" height="${fmt(bh)}" style="opacity:.55"/></g>`;
       });
-      const hr=state.view.w*0.005, hit=hr*2.2;
+      const hr=state.view.w*0.005, hit=hr*3;
       const corners=[['nw',minx,miny],['ne',maxx,miny],['se',maxx,maxy],['sw',minx,maxy]];
       let hs='';
       corners.forEach(([k,hx,hy])=>{
@@ -958,8 +1019,8 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
                ['e',b.x+b.w,b.y+b.h/2],['se',b.x+b.w,b.y+b.h],['s',b.x+b.w/2,b.y+b.h],
                ['sw',b.x,b.y+b.h],['w',b.x,b.y+b.h/2] ];
     const hr=state.view.w*0.005;     // visible handle dot radius (~constant on screen)
-    const hit=hr*2.2;                // small invisible hit area — kept tight so it doesn't cover the whole edge
-    const rotR=state.view.w*0.011, rotHit=rotR*2; // rotation handle stays larger/easier to grab
+    const hit=hr*3;                  // invisible hit area — wider than the dot, so handles are easy to grab
+    const rotR=state.view.w*0.011, rotHit=rotR*2.4; // rotation handle stays larger/easier to grab
     let s=`<g transform="rotate(${fmt(o.rotation||0)} ${fmt(c.x)} ${fmt(c.y)})">`;
     s+=`<rect class="sel-box" x="${fmt(Math.min(b.x,b.x+b.w))}" y="${fmt(Math.min(b.y,b.y+b.h))}" width="${fmt(Math.abs(b.w))}" height="${fmt(Math.abs(b.h))}"/>`;
     const rotY=b.y-rotR*4;
@@ -1345,7 +1406,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     if(!any) return null;
     let polys=traceMaskPolys(mask,gw,gh);
     if(!polys.length) return null;
-    polys=polys.map(p=>simplifyRing(p,1.2).map(([px,py])=>[px/SCALE,py/SCALE]));
+    polys=polys.map(p=>simplifyRing(p,0.8).map(([px,py])=>[px/SCALE,py/SCALE]));
     return {polys, nb:polysBBoxMulti(polys), anchor:{x:gw/(2*SCALE), y:gh*0.62/SCALE}};
   }
   // Rasteryzacja zależy tylko od treści/czcionki/stylu — tsx/tsy/flip/rotation nakładane są
@@ -2164,7 +2225,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     if(o.type==='line') h+=`<div class="field"><label>Kierunek</label><div class="seg" data-seg="flip"><button class="${!o.flip?'on':''}" data-flip="0">↘ ukośna</button><button class="${o.flip?'on':''}" data-flip="1">↗ ukośna</button></div></div>`;
     if(o.type==='text'){
       h+=`<div class="field"><label>Treść napisu</label><input type="text" data-prop="text" value="${escapeXml(o.text||'')}" maxlength="80"></div>`;
-      h+=`<div class="field"><label>Czcionka</label><select data-prop="font">${availableFonts().map(([v,l])=>`<option value='${escapeXml(v)}' ${v===o.font?'selected':''}>${escapeXml(l)}${localFonts.some(f=>f[0]===v)?' • PC':''}</option>`).join('')}</select></div>`;
+      h+=`<div class="field"><label>Czcionka (najedź na nazwę = podgląd)</label><div class="font-dd" id="propsFontDD">${fontDDMarkup(o.font)}</div></div>`;
       h+=`<div class="field"><label>Styl</label><div class="seg" data-seg="textstyle">
         <button class="${o.bold?'on':''}" data-tstyle="bold" style="font-weight:700">B</button>
         <button class="${o.italic?'on':''}" data-tstyle="italic" style="font-style:italic">I</button>
@@ -2436,6 +2497,9 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     if(textH) textH.addEventListener('change',()=>{ applyTextSize(textW,textH); pushHistory(); scheduleLive3D(); });
     const textReset=propsEl.querySelector('#textReset');
     if(textReset) textReset.addEventListener('click',()=>{ const ob=getSel(); if(ob&&ob.type==='text'){ ob.tsx=1; ob.tsy=1; renderAll(); renderProps(); pushHistory(); updateTextToolbar(); } });
+    const propsFontDD=propsEl.querySelector('#propsFontDD');
+    if(propsFontDD) bindFontDD(propsFontDD, ()=>{ const ob=getSel(); return (ob&&ob.type==='text')?ob:null; },
+      ()=>{ renderObjects(); renderOverlay(); pushHistory(); scheduleLive3D(); updateTextToolbar(); });
     const frameBtn=propsEl.querySelector('#frameAddBtn');
     if(frameBtn) frameBtn.addEventListener('click',()=>addTextFrame());
     const ddBtn=propsEl.querySelector('#depthDown'), duBtn=propsEl.querySelector('#depthUp');
@@ -2459,14 +2523,14 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     renderObjects(); renderOverlay();
   }
   const textToolbar=document.getElementById('textToolbar');
-  const ttFont=document.getElementById('ttFont'), ttSize=document.getElementById('ttSize'),
+  const ttFontDD=document.getElementById('ttFontDD'), ttSize=document.getElementById('ttSize'),
         ttBold=document.getElementById('ttBold'), ttItalic=document.getElementById('ttItalic'), ttUnderline=document.getElementById('ttUnderline'),
         ttW=document.getElementById('ttW'), ttH=document.getElementById('ttH'), ttReset=document.getElementById('ttReset');
   function updateTextToolbar(){
     const o=getSel();
     if(!o||o.type!=='text'){ textToolbar.classList.remove('show'); return; }
     textToolbar.classList.add('show');
-    ttFont.innerHTML=availableFonts().map(([v,l])=>`<option value='${escapeXml(v)}' ${v===o.font?'selected':''}>${escapeXml(l)}${localFonts.some(f=>f[0]===v)?' • PC':''}</option>`).join('');
+    ttFontDD.innerHTML=fontDDMarkup(o.font);
     if(document.activeElement!==ttSize) ttSize.value=fmt(o.fontSize||24);
     ttBold.classList.toggle('active',!!o.bold);
     ttItalic.classList.toggle('active',!!o.italic);
@@ -2475,7 +2539,8 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     if(document.activeElement!==ttW) ttW.value=fmt(bb.w);
     if(document.activeElement!==ttH) ttH.value=fmt(bb.h);
   }
-  ttFont.addEventListener('change',()=>{ const o=getSel(); if(!o||o.type!=='text') return; o.font=ttFont.value; renderObjects(); renderOverlay(); renderProps(); pushHistory(); scheduleLive3D(); });
+  bindFontDD(ttFontDD, ()=>{ const o=getSel(); return (o&&o.type==='text')?o:null; },
+    ()=>{ renderObjects(); renderOverlay(); renderProps(); pushHistory(); scheduleLive3D(); updateTextToolbar(); });
   ttSize.addEventListener('change',()=>{ const o=getSel(); if(!o||o.type!=='text') return; o.fontSize=clamp(Number(ttSize.value)||24,4,400); renderObjects(); renderOverlay(); renderProps(); pushHistory(); scheduleLive3D(); });
   [[ttBold,'bold'],[ttItalic,'italic'],[ttUnderline,'underline']].forEach(([btn,key])=>{
     btn.addEventListener('click',()=>{ const o=getSel(); if(!o||o.type!=='text') return; o[key]=!o[key]; renderObjects(); renderOverlay(); renderProps(); pushHistory(); scheduleLive3D(); });
@@ -2714,11 +2779,14 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   gridShowInput.addEventListener('change',()=>{
     state.showGrid=gridShowInput.checked; renderGrid(); autoSaveProject();
   });
+  const snapInput=document.getElementById('snapInput');
+  snapInput.checked=state.snap;
+  snapInput.addEventListener('change',()=>{ state.snap=snapInput.checked; autoSaveProject(); });
 
   /* ---------------- Rozmiar arkusza roboczego ---------------- */
   const docWInput=document.getElementById('docWInput'), docHInput=document.getElementById('docHInput'), docPreset=document.getElementById('docPreset');
   function applyDocSize(w,h){
-    const nw=clamp(Math.round(Number(w))||state.docW,10,3000), nh=clamp(Math.round(Number(h))||state.docH,10,3000);
+    const nw=clamp(Math.round(Number(w))||state.docW,10,760), nh=clamp(Math.round(Number(h))||state.docH,10,760); // maksymalny obszar roboczy: 760 × 760 mm
     docWInput.value=nw; docHInput.value=nh;
     if(nw===state.docW && nh===state.docH) return;
     state.docW=nw; state.docH=nh;
@@ -2739,7 +2807,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       version:1, docW:state.docW, docH:state.docH,
       objects:state.objects, params:state.params, layerMM:state.layerMM,
       hiddenDepths:state.hiddenDepths, depthView:state.depthView, guides:state.guides,
-      grid:state.grid, showGrid:state.showGrid
+      grid:state.grid, showGrid:state.showGrid, snap:state.snap
     };
   }
   function autoSaveProject(){
@@ -2751,18 +2819,20 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       if(!raw) return;
       const d=JSON.parse(raw);
       if(!d || !Array.isArray(d.objects) || !d.objects.length) return;
-      state.docW=d.docW||state.docW; state.docH=d.docH||state.docH;
+      state.docW=clamp(d.docW||state.docW,10,760); state.docH=clamp(d.docH||state.docH,10,760);
       state.objects=d.objects; state.params=d.params||state.params;
       state.layerMM=d.layerMM||{}; state.hiddenDepths=d.hiddenDepths||[];
       state.depthView=d.depthView!==undefined?d.depthView:true;
       state.guides=d.guides&&Array.isArray(d.guides.v)&&Array.isArray(d.guides.h)?d.guides:{v:[],h:[]};
       state.grid=d.grid>0?d.grid:state.grid;
       state.showGrid=d.showGrid!==undefined?d.showGrid:true;
+      state.snap=d.snap!==undefined?!!d.snap:false;
       gridSizeInput.value=state.grid; gridShowInput.checked=state.showGrid;
+      const si=document.getElementById('snapInput'); if(si) si.checked=state.snap;
     }catch(e){}
   }
   function applyProjectData(d){
-    state.docW=d.docW||300; state.docH=d.docH||200;
+    state.docW=clamp(d.docW||300,10,760); state.docH=clamp(d.docH||200,10,760);
     state.objects=d.objects||[];
     state.params=d.params||state.params;
     state.layerMM=d.layerMM||{};
@@ -2771,7 +2841,9 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     state.guides=d.guides&&Array.isArray(d.guides.v)&&Array.isArray(d.guides.h)?d.guides:{v:[],h:[]};
     state.grid=d.grid>0?d.grid:1;
     state.showGrid=d.showGrid!==undefined?d.showGrid:true;
+    state.snap=d.snap!==undefined?!!d.snap:false;
     gridSizeInput.value=state.grid; gridShowInput.checked=state.showGrid;
+    const si2=document.getElementById('snapInput'); if(si2) si2.checked=state.snap;
     state.selectedIds=[]; state.history=[]; state.hIndex=-1;
     docWInput.value=state.docW; docHInput.value=state.docH;
     depthViewBtn.classList.toggle('active',state.depthView);
@@ -3731,15 +3803,23 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   });
 
   /* ---------------- Generator zawiasu (living hinge) ---------------- */
-  // Wzór nacięć "na cegiełkę": rzędy krótkich prostokątnych szczelin, co drugi rząd
-  // przesunięty o pół odstępu — pozwala wygiąć sztywny materiał.
-  function buildLivingHingePattern(W,H,slitLen,kerf,pitchX,pitchY,margin){
+  // Klasyczny wzór "living hinge": KOLUMNY pionowych szczelin. W każdej kolumnie między
+  // końcami sąsiednich szczelin zostaje mostek materiału, a kolumny parzyste/nieparzyste
+  // są przesunięte o pół okresu — mostki jednej kolumny wypadają na środku szczelin
+  // sąsiedniej. Dzięki temu panel daje się wyginać, ale NIE rozpada się na paski.
+  function buildLivingHingePattern(W,H,slitLen,kerf,pitchX,bridge,margin){
     let d='', count=0;
-    for(let y=margin, row=0; y+slitLen<=H-margin+1e-9; y+=pitchY, row++){
-      const offsetX=(row%2===0)?0:pitchX/2;
-      for(let x=margin+offsetX; x+kerf<=W-margin+1e-9; x+=pitchX){
-        d+=`M${fmt(x)} ${fmt(y)}L${fmt(x+kerf)} ${fmt(y)}L${fmt(x+kerf)} ${fmt(y+slitLen)}L${fmt(x)} ${fmt(y+slitLen)}Z`;
-        count++;
+    const period=slitLen+bridge;
+    const y0=margin, y1=H-margin, x1=W-margin;
+    let col=0;
+    for(let x=margin; x+kerf<=x1+1e-9; x+=pitchX, col++){
+      const off=(col%2===0)?0:-period/2;
+      for(let y=y0+off; y<y1-1e-9; y+=period){
+        const a=Math.max(y0,y), b=Math.min(y1,y+slitLen);
+        if(b-a>=Math.min(2,slitLen)){
+          d+=`M${fmt(x)} ${fmt(a)}L${fmt(x+kerf)} ${fmt(a)}L${fmt(x+kerf)} ${fmt(b)}L${fmt(x)} ${fmt(b)}Z`;
+          count++;
+        }
       }
     }
     return {d,count};
@@ -3749,12 +3829,12 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   document.getElementById('modalHingeClose').addEventListener('click',()=>modalHinge.classList.remove('open'));
   modalHinge.addEventListener('click',e=>{ if(e.target===modalHinge) modalHinge.classList.remove('open'); });
   document.getElementById('hingeGenerateBtn').addEventListener('click',()=>{
-    const W=clamp(Number(document.getElementById('hingeW').value)||100,10,2000);
-    const H=clamp(Number(document.getElementById('hingeH').value)||60,10,2000);
-    const slitLen=clamp(Number(document.getElementById('hingeLen').value)||8,2,200);
-    const kerf=clamp(Number(document.getElementById('hingeKerf').value)||1,0.2,5);
-    const pitchX=clamp(Number(document.getElementById('hingePitchX').value)||4,1,100);
-    const pitchY=clamp(Number(document.getElementById('hingePitchY').value)||4,1,100);
+    const W=clamp(Number(document.getElementById('hingeW').value)||100,10,760);
+    const H=clamp(Number(document.getElementById('hingeH').value)||60,10,760);
+    const slitLen=clamp(Number(document.getElementById('hingeLen').value)||20,5,200);
+    const kerf=clamp(Number(document.getElementById('hingeKerf').value)||0.5,0.2,5);
+    const pitchX=clamp(Number(document.getElementById('hingePitchX').value)||3,1,100);
+    const pitchY=clamp(Number(document.getElementById('hingePitchY').value)||3,1,100);
     const margin=clamp(Number(document.getElementById('hingeMargin').value)||5,0,100);
     const {d,count}=buildLivingHingePattern(W,H,slitLen,kerf,pitchX,pitchY,margin);
     if(!count){ alert('Przy tych parametrach nie zmieści się ani jedno nacięcie — zmniejsz margines, długość nacięcia lub odstępy.'); return; }
