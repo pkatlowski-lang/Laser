@@ -96,6 +96,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 
 /* ---- Edycja punktów ścieżki ---- */
 .node-outline{fill:none;stroke:#39d6ff;stroke-width:1.2px;stroke-dasharray:4 3;vector-effect:non-scaling-stroke;pointer-events:none}
+.node-edge-hit{cursor:copy}
 .node-handle-vis{fill:#39d6ff;stroke:#0e0e16;stroke-width:1.2px;vector-effect:non-scaling-stroke;pointer-events:none}
 .node-handle{cursor:pointer}
 
@@ -852,6 +853,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       const docPts=transformObjPts(o, pts.map(p=>p.slice()));
       const hr=state.view.w*0.009, hit=hr*2.6;
       let s=`<polygon points="${docPts.map(p=>fmt(p[0])+','+fmt(p[1])).join(' ')}" class="node-outline"/>`;
+      s+=`<polygon points="${docPts.map(p=>fmt(p[0])+','+fmt(p[1])).join(' ')}" class="node-edge-hit" fill="none" stroke="transparent" stroke-width="${fmt(hit)}" vector-effect="non-scaling-stroke"><title>Kliknij na krawędź, aby dodać punkt</title></polygon>`;
       docPts.forEach((p,i)=>{
         s+=`<circle data-node-idx="${i}" class="node-handle" cx="${fmt(p[0])}" cy="${fmt(p[1])}" r="${fmt(hit)}" fill="transparent"/>`;
         s+=`<circle class="node-handle-vis" cx="${fmt(p[0])}" cy="${fmt(p[1])}" r="${fmt(hr)}"/>`;
@@ -1073,6 +1075,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   }
   // Zwraca OSOBNY wielokąt dla każdej subścieżki (M...) — dzięki temu otwory nie tworzą zygzaków.
   function objSubPolys(o){
+    if(o.type==='text') return textOutlinePolys(o);
     let d;
     if(o.type==='path') d=o.d; else if(BOOL_TYPES.includes(o.type)) d=shapeD(o); else return [];
     if(!d) return [];
@@ -1087,6 +1090,123 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       out.push(transformObjPts(o, pts));
     }
     return out;
+  }
+  /* ---- Wektoryzacja napisu: rasteryzacja na <canvas> + śledzenie konturów (Moore-Neighbor) ----
+     Zwraca poligony liter (zewnętrzne kontury + otwory typu "a","o","e") w jednostkach
+     dokumentu — dzięki temu tekst jest traktowany jak każdy inny kształt: podpora warstw,
+     linie cięcia, sylwetka 3D, zamiast prostokątnego bbox. */
+  const _textOutlineCache=new Map();
+  // Śledzi kontury (zewnętrzne i otwory) binarnej maski pikseli — Moore-Neighbor tracing.
+  function traceMaskPolys(mask,W,H){
+    const DIRS=[[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]]; // E,SE,S,SW,W,NW,N,NE (CW, y w dół)
+    function inside(arr,x,y){ return x>=0&&y>=0&&x<W&&y<H&&arr[y*W+x]===1; }
+    function trace(arr,sx,sy){
+      const path=[]; let cx=sx, cy=sy, dir=6, guard=0;
+      do{
+        path.push([cx,cy]);
+        let found=false;
+        for(let i=1;i<=8;i++){
+          const nd=(dir+i)%8, nx=cx+DIRS[nd][0], ny=cy+DIRS[nd][1];
+          if(inside(arr,nx,ny)){ cx=nx; cy=ny; dir=(nd+4)%8; found=true; break; }
+        }
+        if(!found) break;
+        if(++guard>50000) break;
+      } while(!(cx===sx&&cy===sy) || path.length<2);
+      return path;
+    }
+    function floodMark(arr,visited,sx,sy,val){
+      const stack=[[sx,sy]]; visited[sy*W+sx]=1;
+      while(stack.length){
+        const [x,y]=stack.pop();
+        for(const [nx,ny] of [[x+1,y],[x-1,y],[x,y+1],[x,y-1]]){
+          if(nx<0||ny<0||nx>=W||ny>=H) continue;
+          const idx=ny*W+nx;
+          if(!visited[idx] && arr[idx]===val){ visited[idx]=1; stack.push([nx,ny]); }
+        }
+      }
+    }
+    const polys=[];
+    // kontury zewnętrzne liter
+    const visited=new Uint8Array(W*H);
+    for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+      const idx=y*W+x;
+      if(mask[idx]===1 && !visited[idx]){
+        const p=trace(mask,x,y); if(p.length>=3) polys.push(p);
+        floodMark(mask,visited,x,y,1);
+      }
+    }
+    // tło połączone z krawędzią obrazu -> nie jest otworem
+    const bg=new Uint8Array(W*H);
+    for(let x=0;x<W;x++){ if(mask[x]===0&&!bg[x]) floodMark(mask,bg,x,0,0); const b=(H-1)*W+x; if(mask[b]===0&&!bg[b]) floodMark(mask,bg,x,H-1,0); }
+    for(let y=0;y<H;y++){ const l=y*W; if(mask[l]===0&&!bg[l]) floodMark(mask,bg,0,y,0); const r=y*W+W-1; if(mask[r]===0&&!bg[r]) floodMark(mask,bg,W-1,y,0); }
+    // pozostałe piksele tła = otwory (np. wnętrze "a", "o", "e")
+    const holeMask=new Uint8Array(W*H);
+    for(let i=0;i<W*H;i++) holeMask[i]=(mask[i]===0 && !bg[i])?1:0;
+    const hVisited=new Uint8Array(W*H);
+    for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+      const idx=y*W+x;
+      if(holeMask[idx]===1 && !hVisited[idx]){
+        const p=trace(holeMask,x,y); if(p.length>=3) polys.push(p);
+        floodMark(holeMask,hVisited,x,y,1);
+      }
+    }
+    return polys;
+  }
+  // Rasteryzuje napis na ukrytym <canvas> i zwraca jego kontury w "naturalnej" przestrzeni mm
+  // (px/SCALE) razem z ich łącznym bboxem (do dopasowania do objBBox()).
+  function rasterizeTextOutlines(o){
+    const text=(o.text||'');
+    if(!text.trim()) return null;
+    const fs=Math.max(1,o.fontSize||24);
+    let SCALE=6;
+    let gw=Math.ceil(text.length*fs*1.3*SCALE)+8, gh=Math.ceil(fs*2.4*SCALE)+8;
+    const MAXDIM=1400;
+    if(gw>MAXDIM||gh>MAXDIM){ const f=MAXDIM/Math.max(gw,gh); SCALE=Math.max(1,SCALE*f);
+      gw=Math.ceil(text.length*fs*1.3*SCALE)+8; gh=Math.ceil(fs*2.4*SCALE)+8; }
+    const cnv=document.createElement('canvas'); cnv.width=gw; cnv.height=gh;
+    const ctx=cnv.getContext('2d');
+    const tsx=(o.tsx||1)*(o.flipX?-1:1), tsy=(o.tsy||1)*(o.flipY?-1:1);
+    ctx.save();
+    ctx.translate(gw/2, gh*0.62);
+    ctx.scale(tsx||1, tsy||1);
+    ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+    ctx.fillStyle='#000';
+    ctx.font=`${o.italic?'italic ':''}${o.bold?'bold ':''}${(fs*SCALE).toFixed(2)}px ${o.font}`;
+    ctx.fillText(text,0,0);
+    ctx.restore();
+    let img; try{ img=ctx.getImageData(0,0,gw,gh).data; }catch(e){ return null; }
+    const mask=new Uint8Array(gw*gh);
+    let any=false;
+    for(let i=0;i<gw*gh;i++){ const v=img[i*4+3]>128?1:0; mask[i]=v; if(v) any=true; }
+    if(!any) return null;
+    let polys=traceMaskPolys(mask,gw,gh);
+    if(!polys.length) return null;
+    polys=polys.map(p=>simplifyRing(p,1.2).map(([px,py])=>[px/SCALE,py/SCALE]));
+    return {polys, nb:polysBBoxMulti(polys)};
+  }
+  function textOutlineKey(o){
+    return [o.text||'', o.font||'', o.fontSize||24, o.bold?1:0, o.italic?1:0, o.tsx||1, o.tsy||1, o.flipX?1:0, o.flipY?1:0].join('|');
+  }
+  // Kontury liter w jednostkach DOKUMENTU — dopasowane do objBBox() (pozycja/skala) i obrócone o o.rotation.
+  function textOutlinePolys(o){
+    const b=objBBox(o);
+    if(!(b.w>0)||!(b.h>0)) return [];
+    const key=textOutlineKey(o);
+    let cached=_textOutlineCache.get(key);
+    if(cached===undefined){
+      cached=rasterizeTextOutlines(o);
+      if(_textOutlineCache.size>80) _textOutlineCache.clear();
+      _textOutlineCache.set(key,cached);
+    }
+    if(!cached) return [];
+    const {polys,nb}=cached;
+    const sx=(nb.maxx-nb.minx)||1, sy=(nb.maxy-nb.miny)||1;
+    const c={x:b.x+b.w/2,y:b.y+b.h/2}, rot=deg2rad(o.rotation||0);
+    return polys.map(poly=>poly.map(([px,py])=>{
+      let dx=b.x+(px-nb.minx)/sx*b.w, dy=b.y+(py-nb.miny)/sy*b.h;
+      if(o.rotation){ const rp=rotatePt(dx,dy,c.x,c.y,rot); dx=rp.x; dy=rp.y; }
+      return [dx,dy];
+    }));
   }
   function polyCentroid(poly){ let x=0,y=0; for(const p of poly){ x+=p[0]; y+=p[1]; } return [x/poly.length, y/poly.length]; }
   function polyToPathD(poly){ return poly.map((p,i)=>(i?'L':'M')+fmt(p[0])+' '+fmt(p[1])).join('')+'Z'; }
@@ -1297,6 +1417,28 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
         }
         setCapture(e);
         drag={mode:'nodeMove', o, idx, moved:false};
+        return;
+      }
+    }
+    const edgeHit = !wantPan && state.editingPathId && e.target.closest && e.target.closest('.node-edge-hit');
+    if(edgeHit){
+      const o=state.objects.find(x=>x.id===state.editingPathId);
+      if(o){
+        const dp=clientToDoc(e);
+        const pts=pathPolyPoints(o.d);
+        const docPts=transformObjPts(o, pts.map(p=>p.slice()));
+        let best=null;
+        for(let i=0;i<docPts.length;i++){
+          const a=docPts[i], b=docPts[(i+1)%docPts.length];
+          const proj=projectOnSegment([dp.x,dp.y], a, b);
+          const d=Math.hypot(dp.x-proj[0], dp.y-proj[1]);
+          if(!best||d<best.d) best={i,proj};
+        }
+        if(best){
+          const lp=docPtToLocal(o, {x:best.proj[0], y:best.proj[1]});
+          pts.splice(best.i+1, 0, [snap(lp[0]), snap(lp[1])]);
+          o.d=polyToPathD(pts); recalcPathBBox(o); pushHistory(); renderAll(); renderProps();
+        }
         return;
       }
     }
@@ -2921,14 +3063,11 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   function mergeLayerRings(objs, dep){
     let rings=[];
     objs.forEach(o=>{
-      let polys;
-      if(o.type==='text'){
-        // tekst: traktujemy jak prostokąt (obrócony bbox) — daje podparcie warstwom
-        // poniżej i własny kontur do wycięcia na swojej warstwie
+      let polys=objSubPolys(o);
+      if(o.type==='text' && !polys.length){
+        // brak rozpoznanych konturów liter (pusty tekst / błąd rasteryzacji) -> awaryjnie obrócony bbox
         const b=objBBox(o), c={x:b.x+b.w/2,y:b.y+b.h/2}, rot=deg2rad(o.rotation||0);
         polys=[[[b.x,b.y],[b.x+b.w,b.y],[b.x+b.w,b.y+b.h],[b.x,b.y+b.h]].map(([x,y])=>{ const p=rotatePt(x,y,c.x,c.y,rot); return [p.x,p.y]; })];
-      } else {
-        polys=objSubPolys(o);
       }
       polys.forEach(r=>{ const sr=simplifyRing(r,0.15); if(sr.length>=3) rings.push({pts:sr, area:Math.abs(polyArea(sr)), c:polyCentroid(sr), oid:o.id}); });
     });
@@ -2964,14 +3103,16 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       const cutObjs=vis.filter(o=>(o.depth||1)>=dep && (o.type==='text' || (BOOL_TYPES.includes(o.type) && o.mode!=='engrave')));
       const rings=mergeLayerRings(cutObjs, dep);
       const cutPaths=rings.map(r=>`<path d="${polyToPathD(r)}" fill="none" stroke="${COLORS.cut}" stroke-width="0.3"/>`).join('');
-      // tekst tej warstwy — zawsze jako KONTUR liter (nawet w trybie "grawer"), żeby dało się go wyciąć
-      const textOwn=vis.filter(o=>o.type==='text' && (o.depth||1)===dep)
-        .map(o=> o.mode==='engrave' ? objMarkup({...o,mode:'cut'},true) : objMarkup(o,true)).join('');
+      // tekst tej warstwy w trybie "grawer" — wypełniona zwektoryzowana sylwetka liter (do grawerowania).
+      // Kontur do CIĘCIA liter jest już częścią cutPaths (cutObjs zawiera cały tekst niezależnie od trybu).
+      const textEngrave=vis.filter(o=>o.type==='text' && (o.depth||1)===dep && o.mode==='engrave')
+        .map(o=>{ const polys=objSubPolys(o);
+          return polys.length ? `<path d="${polys.map(polyToPathD).join(' ')}" fill="${COLORS.engrave}" fill-rule="evenodd"/>` : objMarkup({...o,mode:'cut'},true); }).join('');
       // dekoracje (grawer) kształtów z tej warstwy — rysowane na wierzchu obrysu cięcia
       const deco=vis.filter(o=>(o.depth||1)===dep && o.mode==='engrave' && o.type!=='text').map(o=>objMarkup(o,true)).join('');
       groups+=`<g class="warstwa-${dep}" data-warstwa="${dep}" transform="translate(${fmt(ox)} ${labelH})">`+
         `<text x="${fmt(W/2)}" y="-3" font-size="6" text-anchor="middle" fill="${col}" font-family="sans-serif">Warstwa ${dep} · ${fmt(layerMM(dep))} mm</text>`+
-        cutPaths+textOwn+deco+`</g>`;
+        cutPaths+textEngrave+deco+`</g>`;
     });
     const svg=`<svg xmlns="${SVG_NS}" viewBox="0 0 ${fmt(totalW)} ${fmt(H+labelH)}" width="${fmt(totalW)}mm" height="${fmt(H+labelH)}mm">${groups}</svg>`;
     return {svg, w:totalW, h:H+labelH};
