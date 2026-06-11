@@ -1023,6 +1023,13 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     const xs=pts.map(p=>p.x), ys=pts.map(p=>p.y);
     return {minx:Math.min(...xs),miny:Math.min(...ys),maxx:Math.max(...xs),maxy:Math.max(...ys)};
   }
+  // łączny prostokąt (oś-równoległy) wielu zaznaczonych elementów — używany przy
+  // skalowaniu/przesuwaniu całego zaznaczenia z uchwytu narożnego oraz w panelu właściwości
+  function selBBox(sel){
+    let minx=Infinity,miny=Infinity,maxx=-Infinity,maxy=-Infinity;
+    sel.forEach(o=>{ const bb=rotatedBBox(o); minx=Math.min(minx,bb.minx); miny=Math.min(miny,bb.miny); maxx=Math.max(maxx,bb.maxx); maxy=Math.max(maxy,bb.maxy); });
+    return {minx,miny,maxx,maxy,w:maxx-minx,h:maxy-miny};
+  }
   function bboxIntersect(a,r){ return a.maxx>=r.x && a.minx<=r.x+r.w && a.maxy>=r.y && a.miny<=r.y+r.h; }
 
   // "Smart guides": krawędzie/środki innych elementów oraz płyty roboczej, do których przyciąga się przesuwany element
@@ -1721,8 +1728,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   function startMResize(e,handle,docP){
     setCapture(e);
     const sel=getSelected().filter(o=>!o.locked); if(sel.length<2) return;
-    let minx=Infinity,miny=Infinity,maxx=-Infinity,maxy=-Infinity;
-    sel.forEach(o=>{ const bb=rotatedBBox(o); minx=Math.min(minx,bb.minx); miny=Math.min(miny,bb.miny); maxx=Math.max(maxx,bb.maxx); maxy=Math.max(maxy,bb.maxy); });
+    const {minx,miny,maxx,maxy}=selBBox(sel);
     const anchor={ x: handle.includes('w')?maxx:minx, y: handle.includes('n')?maxy:miny };
     const startCorner={ x: handle.includes('w')?minx:maxx, y: handle.includes('n')?miny:maxy };
     const startDist=Math.hypot(startCorner.x-anchor.x, startCorner.y-anchor.y)||1;
@@ -2011,6 +2017,15 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   }
   function renderMultiProps(sel){
     let h=`<div class="empty-note" style="padding-bottom:4px">Zaznaczono elementów: <strong style="color:var(--text)">${sel.length}</strong></div>`;
+    // wspólny prostokąt zaznaczenia — pozwala numerycznie przesunąć (X/Y) i przeskalować
+    // proporcjonalnie (Sz./Wys., zakotwiczone w lewym górnym rogu) całe zaznaczenie naraz
+    const mb=selBBox(sel);
+    h+=`<div class="field"><label>Pozycja zaznaczenia X / Y (mm)</label><div class="row2">
+      <input type="number" id="mbX" value="${fmt(mb.minx)}" step="1" title="${WHEEL_HINT}">
+      <input type="number" id="mbY" value="${fmt(mb.miny)}" step="1" title="${WHEEL_HINT}"></div></div>`;
+    h+=`<div class="field"><label>Wymiary zaznaczenia Sz. / Wys. (mm)</label><div class="row2">
+      <input type="number" id="mbW" value="${fmt(mb.w)}" min="1" step="1" title="${WHEEL_HINT}">
+      <input type="number" id="mbH" value="${fmt(mb.h)}" min="1" step="1" title="${WHEEL_HINT}"></div></div>`;
     const gids=[...new Set(sel.map(o=>o.groupId).filter(Boolean))];
     const isWholeGroup = gids.length===1 && sel.every(o=>o.groupId===gids[0]) && state.objects.filter(o=>o.groupId===gids[0]).length===sel.length;
     h+=`<div class="field"><div class="seg">`;
@@ -2043,6 +2058,39 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     propsEl.querySelectorAll('[data-group]').forEach(b=>b.addEventListener('click',()=>{ b.dataset.group==='group'?groupSel():ungroupSel(); }));
     propsEl.querySelectorAll('[data-seg="mmode"] button').forEach(b=>b.addEventListener('click',()=>{ const m=b.dataset.mode; getSelected().forEach(o=>o.mode=m); renderObjects(); renderLayers(); pushHistory(); }));
     propsEl.querySelectorAll('[data-rot90]').forEach(b=>b.addEventListener('click',()=>rotate90(Number(b.dataset.rot90))));
+    // numeryczna pozycja/rozmiar całego zaznaczenia (X/Y przesuwa, Sz./Wys. skaluje
+    // proporcjonalnie wszystkie zaznaczone elementy względem lewego górnego rogu)
+    const mbX=propsEl.querySelector('#mbX'), mbY=propsEl.querySelector('#mbY'), mbW=propsEl.querySelector('#mbW'), mbH=propsEl.querySelector('#mbH');
+    if(mbX) mbX.addEventListener('change',()=>{
+      const cur=getSelected(), bb=selBBox(cur), dx=Number(mbX.value)-bb.minx;
+      cur.forEach(o=>{ o.x+=dx; });
+      renderAll(); renderProps(); pushHistory();
+    });
+    if(mbY) mbY.addEventListener('change',()=>{
+      const cur=getSelected(), bb=selBBox(cur), dy=Number(mbY.value)-bb.miny;
+      cur.forEach(o=>{ o.y+=dy; });
+      renderAll(); renderProps(); pushHistory();
+    });
+    function scaleSelTo(axis,newVal){
+      const cur=getSelected(), bb=selBBox(cur);
+      const old=axis==='w'?bb.w:bb.h; if(old<=0) return;
+      const s=clamp(newVal/old,0.02,50);
+      const anchor={x:bb.minx,y:bb.miny};
+      const items=cur.map(o=>{
+        const c0=objCenter(o);
+        const it={o,c0};
+        if(o.type==='path'){ it.sx0=o.sx||1; it.sy0=o.sy||1; }
+        else if(o.type==='text'){ it.fs0=o.fontSize||24; it.x0=o.x; it.y0=o.y; }
+        else { it.w0=o.w; it.h0=o.h; if(o.type==='rect') it.rx0=o.rx||0; }
+        return it;
+      });
+      items.forEach(it=>{
+        const newCenter={ x: anchor.x+(it.c0.x-anchor.x)*s, y: anchor.y+(it.c0.y-anchor.y)*s };
+        applyGroupScale(it,newCenter,s);
+      });
+    }
+    if(mbW) mbW.addEventListener('change',()=>{ scaleSelTo('w',Number(mbW.value)); renderAll(); renderProps(); pushHistory(); });
+    if(mbH) mbH.addEventListener('change',()=>{ scaleSelTo('h',Number(mbH.value)); renderAll(); renderProps(); pushHistory(); });
   }
   function renderProps(){
     updateTextToolbar();
@@ -3991,7 +4039,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   window.addEventListener('resize',()=>{ syncViewAspect(); applyView(); renderOverlay(); });
 
   // Hak debugowy do testów (Playwright) — bez wpływu na działanie edytora
-  window.__lzr={state, buildSeparatedSVG, buildLayerScene, mergeLayerRings, unionAll, objSubPolys, objSubPolysRepeated, textOutlinePolys, objBBox, polyArea, polysBBoxMulti, polyToPathD, renderAll, updateLive3D, renderProps, select, defaultsFor, zoomFit, repeatTransforms, exportSVG, buildGearPoints, simplifyRing, rasterizeTextOutlines};
+  window.__lzr={state, buildSeparatedSVG, buildLayerScene, mergeLayerRings, unionAll, objSubPolys, objSubPolysRepeated, textOutlinePolys, objBBox, rotatedBBox, selBBox, polyArea, polysBBoxMulti, polyToPathD, renderAll, updateLive3D, renderProps, select, defaultsFor, zoomFit, repeatTransforms, exportSVG, buildGearPoints, simplifyRing, rasterizeTextOutlines};
 })();
 </script>
 </body>
