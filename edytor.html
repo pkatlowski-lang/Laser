@@ -1623,6 +1623,9 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       h+=numField('Pozycja Y (mm)','y',o,{step:1});
       h+=numField('Szerokość (mm)','w',o,{step:1,min:1});
       h+=numField('Wysokość (mm)','h',o,{step:1,min:1});
+      if(['rect','ellipse','polygon','star'].includes(o.type)){
+        h+=`<div class="field" style="margin-top:-6px"><label class="check-label"><input type="checkbox" id="shapeLockRatio" ${o.lockRatio?'checked':''}> 🔗 Zachowaj proporcje przy zmianie rozmiaru</label></div>`;
+      }
     }
     h+=rangeField('Obrót (°)','rotation',o.rotation||0,0,360,1,o);
     if(o.type==='path'||o.type==='text'){
@@ -1834,7 +1837,13 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       inp.addEventListener(ev, ()=>{
         let val=inp.value; if(isNum) val=Number(val);
         if(path==='repeat.type'){ o.repeat=normalizeRepeat(val,o.repeat); renderProps(); renderObjects(); renderOverlay(); if(inp.type!=='range') pushHistory(); return; }
+        const oldW=o.w, oldH=o.h;
         setProp(o,path,val);
+        if(o.lockRatio && (path==='w'||path==='h') && oldW>0 && oldH>0){
+          const otherProp=path==='w'?'h':'w';
+          o[otherProp]=Math.max(0.01, Math.round((val/(path==='w'?oldW:oldH))*(path==='w'?oldH:oldW)*100)/100);
+          const otherInp=propsEl.querySelector(`[data-prop="${otherProp}"]`); if(otherInp) otherInp.value=fmt(o[otherProp]);
+        }
         const out=propsEl.querySelector(`[data-out="${CSS.escape(path)}"]`); if(out) out.textContent=fmt(val);
         renderObjects(); renderOverlay();
         if(ev==='change') pushHistory();
@@ -1851,6 +1860,8 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
         renderProps(); renderObjects(); renderOverlay(); pushHistory();
       });
     });
+    const shapeLockRatio=propsEl.querySelector('#shapeLockRatio');
+    if(shapeLockRatio) shapeLockRatio.addEventListener('change',()=>{ o.lockRatio=shapeLockRatio.checked; pushHistory(); });
     propsEl.querySelectorAll('[data-seg="mode"] button').forEach(b=>b.addEventListener('click',()=>{ o.mode=b.getAttribute('data-mode'); renderProps(); renderObjects(); pushHistory(); }));
     propsEl.querySelectorAll('[data-seg="flip"] button').forEach(b=>b.addEventListener('click',()=>{ o.flip=b.getAttribute('data-flip')==='1'; renderProps(); renderObjects(); pushHistory(); }));
     propsEl.querySelectorAll('[data-seg="flipaxis"] button').forEach(b=>b.addEventListener('click',()=>{
