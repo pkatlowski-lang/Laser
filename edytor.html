@@ -1236,6 +1236,17 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     }
     return out;
   }
+  // Kontury obiektu (objSubPolys) z uwzględnieniem powieleń (repeat) — każda kopia
+  // (translate/rotate/lustro z repeatTransforms) jako osobny zestaw poligonów
+  // w przestrzeni dokumentu. Bez tego eksport scalonych konturów (mergeLayerRings)
+  // i wektoryzowanego tekstu pomijałby powielone egzemplarze.
+  function objSubPolysRepeated(o){
+    const base=objSubPolys(o), out=[];
+    repeatTransforms(o).forEach(t=>{
+      base.forEach(p=>{ const cp=p.map(pt=>pt.slice()); out.push(t?applyTransformStr(cp,t):cp); });
+    });
+    return out;
+  }
   /* ---- Wektoryzacja napisu: rasteryzacja na <canvas> + śledzenie konturów (Moore-Neighbor) ----
      Zwraca poligony liter (zewnętrzne kontury + otwory typu "a","o","e") w jednostkach
      dokumentu — dzięki temu tekst jest traktowany jak każdy inny kształt: podpora warstw,
@@ -1695,6 +1706,16 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     const b=objBBox(o), c={x:b.x+b.w/2,y:b.y+b.h/2};
     if(handle==='rot'){ drag={mode:'rotate',o,c,startAng:o.rotation||0,startMouse:Math.atan2(docP.y-c.y,docP.x-c.x)}; return; }
     drag={mode:'resize',o,handle,b:{...b},c,rot:deg2rad(o.rotation||0),startFont:o.fontSize||24};
+    if(o.type==='text'){
+      const el=gObjects.querySelector(`[data-id="${o.id}"] text`);
+      if(el){ try{
+        const nb=el.getBBox(), fs=o.fontSize||24;
+        drag.naturalBB={x:nb.x,y:nb.y,width:nb.width,height:nb.height};
+        // przesunięcie naturalnej ramki <text> względem punktu kotwiczenia (o.x / baseline) — stałe podczas całego przeciągania
+        drag.txOffX=nb.x-o.x;
+        drag.txOffY=nb.y-(o.y+fs*0.34);
+      }catch(err){} }
+    }
   }
   // skalowanie całej grupy zaznaczonych elementów proporcjonalnie, ciągnąc za narożny uchwyt wspólnej ramki
   function startMResize(e,handle,docP){
@@ -1878,13 +1899,40 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
 
   function doResize(d,docP,shift){
     const o=d.o;
-    if(o.type==='text'){ // scale font about center
-      const c=d.c; const dist=Math.hypot(docP.x-c.x,docP.y-c.y);
-      const b=d.b; const startDist=Math.hypot((b.x+b.w)-c.x,(b.y+b.h)-c.y)||1;
-      o.fontSize=clamp(Math.round(d.startFont*dist/startDist),4,400);
+    const rot=d.rot, c=d.c, b=d.b, h=d.handle;
+    if(o.type==='text'){
+      // narożnik (lub Shift) -> proporcjonalne skalowanie "wektorowe" przez fontSize (jak dotychczas)
+      if(h.length===2 || shift || !d.naturalBB){
+        const dist=Math.hypot(docP.x-c.x,docP.y-c.y);
+        const startDist=Math.hypot((b.x+b.w)-c.x,(b.y+b.h)-c.y)||1;
+        o.fontSize=clamp(Math.round(d.startFont*dist/startDist),4,400);
+        return;
+      }
+      // krawędź (n/s/e/w) -> niezależne rozciąganie w poziomie LUB w pionie (tsx/tsy),
+      // z zakotwiczeniem przeciwnej krawędzi w miejscu (jak przy zmianie rozmiaru kształtów)
+      const p=rot? rotatePt(docP.x,docP.y,c.x,c.y,-rot) : docP;
+      const px=snap(p.x), py=snap(p.y);
+      const nb=d.naturalBB, fs=o.fontSize||24;
+      let nw=b.w, nh=b.h;
+      if(h==='e') nw=Math.max(px-b.x,1);
+      else if(h==='w') nw=Math.max((b.x+b.w)-px,1);
+      else if(h==='s') nh=Math.max(py-b.y,1);
+      else if(h==='n') nh=Math.max((b.y+b.h)-py,1);
+      // objBBox skaluje naturalną ramkę <text> względem punktu kotwiczenia (o.x / baseline), więc
+      // bbox.x = o.x + txOffX*tsxEff (analogicznie dla y) — stąd liczymy nowe o.x/o.y tak,
+      // by przeciwna krawędź pozostała w miejscu, a żądana krawędź trafiła w pozycję kursora.
+      if(h==='e'||h==='w'){
+        const flipSgn=o.flipX?-1:1, mag=clamp(nw/(nb.width||1),0.05,20);
+        o.tsx=mag; const tsxEff=mag*flipSgn;
+        o.x = (h==='e') ? (b.x-d.txOffX*tsxEff) : ((b.x+b.w)-(d.txOffX+nb.width)*tsxEff);
+      } else {
+        const flipSgn=o.flipY?-1:1, mag=clamp(nh/(nb.height||1),0.05,20);
+        o.tsy=mag; const tsyEff=mag*flipSgn;
+        const ay = (h==='s') ? (b.y-d.txOffY*tsyEff) : ((b.y+b.h)-(d.txOffY+nb.height)*tsyEff);
+        o.y = ay-fs*0.34;
+      }
       return;
     }
-    const rot=d.rot, c=d.c, b=d.b, h=d.handle;
     // Shift (lub trwale włączone "zachowaj proporcje" dla podstawowych kształtów) -> skalowanie z narożnika z zachowaniem b.w:b.h
     const lockProportions = o.type!=='line' && (shift || (['rect','ellipse','polygon','star'].includes(o.type) && o.lockRatio));
     let nx,ny,nw,nh;
@@ -3069,17 +3117,29 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     depths.forEach(dep=>{
       const col=depthColor(dep), wallCol=darkenHex(col,0.55);
       const mm=layerMM(dep);
-      const thick=Math.max(3, mm*pxPerMM);     // grubość płyty w px (proporcjonalna do mm)
       // KUMULATYWNA sylwetka: wszystkie elementy na warstwach >= dep
       const objs=vis.filter(o=>(o.depth||1)>=dep);
       const geomObjs=objs.filter(o=>BOOL_TYPES.includes(o.type)||o.type==='text');
       const otherObjs=objs.filter(o=>o.type==='line');
+      const ownGeom=geomObjs.filter(o=>(o.depth||1)===dep);
+      // warstwy złożone WYŁĄCZNIE z tekstu renderujemy jako cienkie (grubość minimalna)
+      // niezależnie od pxPerMM — przy dużym wizualnym przeskalowaniu grubości małe otwory/odstępy
+      // liter (np. "o", "a") wyglądałyby jak wypełnione "tunele" zamiast prześwitów
+      const textOnlyLayer=ownGeom.length>0 && ownGeom.every(o=>o.type==='text');
+      const thick=textOnlyLayer ? 3 : Math.max(3, mm*pxPerMM);     // grubość płyty w px (proporcjonalna do mm)
       // scalony obrys geometrii (bez wewnętrznych linii) — jedna ścieżka, otwory przez fill-rule evenodd
       const rings=mergeLayerRings(geomObjs, dep);
       const zTop=zBase+thick;                   // górna ścianka tej płyty
-      // ---- ściany boczne: prawdziwe pionowe "kwadraty" wzdłuż każdej krawędzi obrysu ----
+      // pierścienie będące "dziurami" (np. wnętrze liter "o"/"a") leżą wewnątrz innego,
+      // większego pierścienia tej samej warstwy — pomijamy dla nich ścianki boczne, żeby przez
+      // otwór było widać warstwę pod spodem zamiast "tunelu" w kolorze ścianki (przy grubszej
+      // ekstruzji wizualnej małe otwory wyglądałyby inaczej jak wypełnione/zalane)
+      const ringMeta=rings.map(r=>({pts:r, area:Math.abs(polyArea(r)), c:polyCentroid(r)}));
+      const isHoleRing=ringMeta.map(r=>ringMeta.some(o2=>o2!==r && o2.area>r.area && pointInPoly(r.c,o2.pts)));
+      // ---- ściany boczne: prawdziwe pionowe "kwadraty" wzdłuż każdej krawędzi obrysu (poza dziurami) ----
       let walls='';
-      rings.forEach(ring=>{
+      rings.forEach((ring,ringIdx)=>{
+        if(isHoleRing[ringIdx]) return;
         const n=ring.length;
         for(let i=0;i<n;i++){
           const a=ring[i], b=ring[(i+1)%n];
@@ -3321,12 +3381,18 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   function mergeLayerRings(objs, dep){
     const fillGroups=[], holeCutouts=[];
     objs.forEach(o=>{
-      let polys=objSubPolys(o);
-      if(o.type==='text' && !polys.length){
+      let basePolys=objSubPolys(o);
+      if(o.type==='text' && !basePolys.length){
         // brak rozpoznanych konturów liter (pusty tekst / błąd rasteryzacji) -> awaryjnie obrócony bbox
         const b=objBBox(o), c={x:b.x+b.w/2,y:b.y+b.h/2}, rot=deg2rad(o.rotation||0);
-        polys=[[[b.x,b.y],[b.x+b.w,b.y],[b.x+b.w,b.y+b.h],[b.x,b.y+b.h]].map(([x,y])=>{ const p=rotatePt(x,y,c.x,c.y,rot); return [p.x,p.y]; })];
+        basePolys=[[[b.x,b.y],[b.x+b.w,b.y],[b.x+b.w,b.y+b.h],[b.x,b.y+b.h]].map(([x,y])=>{ const p=rotatePt(x,y,c.x,c.y,rot); return [p.x,p.y]; })];
       }
+      // uwzględnij powielenia (repeat) — każda kopia (translate/rotate/lustro) wchodzi
+      // do scalania jako osobny zestaw poligonów, inaczej powielone elementy znikałyby z eksportu
+      const polys=[];
+      repeatTransforms(o).forEach(t=>{
+        basePolys.forEach(p=>{ const cp=p.map(pt=>pt.slice()); polys.push(t?applyTransformStr(cp,t):cp); });
+      });
       const rings=polys.map(r=>simplifyRing(r,0.15)).filter(r=>r.length>=3);
       if(!rings.length) return;
       if(o.role==='hole'){ rings.forEach(r=>holeCutouts.push(r)); return; }
@@ -3385,7 +3451,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       // tekst tej warstwy w trybie "grawer" — wypełniona zwektoryzowana sylwetka liter (do grawerowania).
       // Kontur do CIĘCIA liter jest już częścią cutPaths (cutObjs zawiera cały tekst niezależnie od trybu).
       const textEngrave=vis.filter(o=>o.type==='text' && (o.depth||1)===dep && o.mode==='engrave')
-        .map(o=>{ const polys=objSubPolys(o);
+        .map(o=>{ const polys=objSubPolysRepeated(o);
           return polys.length ? `<path d="${polys.map(polyToPathD).join(' ')}" fill="${COLORS.engrave}" fill-rule="evenodd"/>` : objMarkup({...o,mode:'cut'},true); }).join('');
       // dekoracje (grawer) kształtów z tej warstwy — rysowane na wierzchu obrysu cięcia
       const deco=vis.filter(o=>(o.depth||1)===dep && o.mode==='engrave' && o.type!=='text' && o.role!=='hole').map(o=>objMarkup(o,true)).join('');
@@ -3405,9 +3471,40 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   }
 
   /* ---------------- Export ---------------- */
+  // Główny eksport SVG: tekst eksportowany jest zawsze jako zwektoryzowany kontur liter
+  // (objSubPolysRepeated), nie jako element <text> zależny od czcionki dostępnej w innym
+  // programie. Kształty cięcia/nacięcia (oraz tekst w tych trybach) tej samej warstwy
+  // głębokości są scalane przez mergeLayerRings — usuwa to zduplikowane/wspólne linie
+  // obrysu tam, gdzie elementy się stykają lub nakładają.
   function exportSVG(){
     const W=state.docW,H=state.docH;
-    const body=state.objects.filter(o=>o.visible && o.type!=='image').map(o=>objMarkup(o,true)).join('');
+    const vis=state.objects.filter(o=>o.visible && o.type!=='image');
+    const depths=[...new Set(vis.map(o=>o.depth||1))].sort((a,b)=>a-b);
+    let body='';
+    depths.forEach(dep=>{
+      const layer=vis.filter(o=>(o.depth||1)===dep);
+      // grawer: kształty jako wypełniona sylwetka, tekst jako zwektoryzowane litery (bez fontu)
+      body+=layer.filter(o=>o.mode==='engrave' && o.type!=='text' && o.role!=='hole').map(o=>objMarkup(o,true)).join('');
+      body+=layer.filter(o=>o.type==='text' && o.mode==='engrave').map(o=>{
+        const polys=objSubPolysRepeated(o);
+        return polys.length ? `<path d="${polys.map(polyToPathD).join(' ')}" fill="${COLORS.engrave}" fill-rule="evenodd"/>` : objMarkup({...o,mode:'cut'},true);
+      }).join('');
+      // cięcie i nacięcie: kontury (w tym tekst, zawsze wektoryzowany) tej samej warstwy
+      // i trybu są scalane w jeden obrys bez wewnętrznych linii na wspólnych krawędziach;
+      // otwory ("dziury") odejmowane są od obrysu cięcia
+      const holes=layer.filter(o=>o.role==='hole');
+      let holesUsed=false;
+      [['cut',COLORS.cut,''],['score',COLORS.score,' stroke-dasharray="1.2 0.9"']].forEach(([mode,col,dash])=>{
+        const objs=layer.filter(o=>o.role!=='hole' && (o.mode||'cut')===mode && (o.type==='text'||BOOL_TYPES.includes(o.type)));
+        if(!objs.length) return;
+        if(mode==='cut') holesUsed=true;
+        const rings=mergeLayerRings(mode==='cut'?[...objs,...holes]:objs, dep);
+        body+=rings.map(r=>`<path d="${polyToPathD(r)}" fill="none" stroke="${col}" stroke-width="0.12"${dash}/>`).join('');
+      });
+      // otwory bez żadnego materiału cięcia w tej warstwie (skrajny przypadek) — rysujemy
+      // je niezależnie, jak dotychczas, przerywaną fioletową linią
+      if(!holesUsed) body+=holes.map(o=>objMarkup(o,true)).join('');
+    });
     const svg=`<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="${SVG_NS}" viewBox="0 0 ${W} ${H}" width="${W}mm" height="${H}mm">\n${body}\n</svg>`;
     const blob=new Blob([svg],{type:'image/svg+xml'}); const url=URL.createObjectURL(blob);
     const a=document.createElement('a'); a.href=url; a.download=`projekt-laser-${Date.now()}.svg`;
@@ -3894,7 +3991,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   window.addEventListener('resize',()=>{ syncViewAspect(); applyView(); renderOverlay(); });
 
   // Hak debugowy do testów (Playwright) — bez wpływu na działanie edytora
-  window.__lzr={state, buildSeparatedSVG, buildLayerScene, mergeLayerRings, unionAll, objSubPolys, objBBox, polyArea, renderAll, updateLive3D, renderProps, select};
+  window.__lzr={state, buildSeparatedSVG, buildLayerScene, mergeLayerRings, unionAll, objSubPolys, objSubPolysRepeated, textOutlinePolys, objBBox, polyArea, polysBBoxMulti, polyToPathD, renderAll, updateLive3D, renderProps, select, defaultsFor, zoomFit, repeatTransforms, exportSVG, buildGearPoints, simplifyRing, rasterizeTextOutlines};
 })();
 </script>
 </body>
