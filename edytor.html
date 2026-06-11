@@ -1599,6 +1599,8 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       <button data-align="top">⊤ Góra</button><button data-align="vcenter">┼ Środek</button><button data-align="bottom">⊥ Dół</button></div></div>`;
     if(sel.length>=3) h+=`<div class="field"><label>Rozłóż równomiernie</label><div class="seg">
       <button data-dist="h">↔ Poziomo</button><button data-dist="v">↕ Pionowo</button></div></div>`;
+    h+=`<div class="field"><label>Obróć każdy element</label><div class="seg">
+      <button data-rot90="-1">↺ Obróć 90°</button><button data-rot90="1">↻ Obróć 90°</button></div></div>`;
     const boolCount=sel.filter(o=>BOOL_TYPES.includes(o.type)).length;
     if(boolCount>=2){
       const xorBtn=boolCount===2?'<button data-bool="xor">Wyklucz</button>':'';
@@ -1614,6 +1616,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     propsEl.querySelectorAll('[data-bool]').forEach(b=>b.addEventListener('click',()=>booleanOp(b.dataset.bool)));
     propsEl.querySelectorAll('[data-group]').forEach(b=>b.addEventListener('click',()=>{ b.dataset.group==='group'?groupSel():ungroupSel(); }));
     propsEl.querySelectorAll('[data-seg="mmode"] button').forEach(b=>b.addEventListener('click',()=>{ const m=b.dataset.mode; getSelected().forEach(o=>o.mode=m); renderObjects(); renderLayers(); pushHistory(); }));
+    propsEl.querySelectorAll('[data-rot90]').forEach(b=>b.addEventListener('click',()=>rotate90(Number(b.dataset.rot90))));
   }
   function renderProps(){
     updateTextToolbar();
@@ -1648,6 +1651,10 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       }
     }
     h+=rangeField('Obrót (°)','rotation',o.rotation||0,0,360,1,o);
+    h+=`<div class="field" style="margin-top:-6px"><div class="seg">
+      <button type="button" data-rot90="-1" title="Obróć o 90° w lewo">↺ Obróć 90°</button>
+      <button type="button" data-rot90="1" title="Obróć o 90° w prawo">↻ Obróć 90°</button>
+    </div></div>`;
     if(o.type==='path'||o.type==='text'){
       h+=`<div class="field"><label>Odbicie lustrzane</label><div class="seg" data-seg="flipaxis">
         <button class="${o.flipX?'on':''}" data-flipaxis="x">↔ Poziomo</button>
@@ -1882,6 +1889,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     });
     const shapeLockRatio=propsEl.querySelector('#shapeLockRatio');
     if(shapeLockRatio) shapeLockRatio.addEventListener('change',()=>{ o.lockRatio=shapeLockRatio.checked; pushHistory(); });
+    propsEl.querySelectorAll('[data-rot90]').forEach(b=>b.addEventListener('click',()=>rotate90(Number(b.getAttribute('data-rot90')))));
     propsEl.querySelectorAll('[data-seg="mode"] button').forEach(b=>b.addEventListener('click',()=>{ o.mode=b.getAttribute('data-mode'); renderProps(); renderObjects(); pushHistory(); }));
     propsEl.querySelectorAll('[data-seg="flip"] button').forEach(b=>b.addEventListener('click',()=>{ o.flip=b.getAttribute('data-flip')==='1'; renderProps(); renderObjects(); pushHistory(); }));
     propsEl.querySelectorAll('[data-seg="flipaxis"] button').forEach(b=>b.addEventListener('click',()=>{
@@ -2426,6 +2434,12 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     }
     if(changed){ pushHistory(); renderAll(); renderProps(); }
   }
+  // obraca każdy zaznaczony element o 90° (dir: 1 = w prawo, -1 = w lewo) wokół jego własnego środka
+  function rotate90(dir){
+    const sel=getSelected().filter(o=>!o.locked); if(!sel.length) return;
+    sel.forEach(o=>{ o.rotation=((((o.rotation||0)+dir*90)%360)+360)%360; });
+    renderObjects(); renderOverlay(); renderProps(); pushHistory(); scheduleLive3D();
+  }
   const ctxMenu=document.getElementById('ctxMenu');
   function closeCtxMenu(){ ctxMenu.classList.remove('open'); ctxMenu.innerHTML=''; }
   function ctxItem(label,action,opts){ opts=opts||{};
@@ -2453,8 +2467,10 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       h+=ctxItem('⬆ Wyżej <span class="ctx-key">Ctrl+]</span>','forward');
       h+=ctxItem('⬇ Niżej <span class="ctx-key">Ctrl+[</span>','backward');
       h+=ctxItem('⤓ Na spód <span class="ctx-key">Ctrl+Shift+[</span>','back');
+      h+='<hr>';
+      h+=ctxItem('↻ Obróć o 90° w prawo','rot90cw');
+      h+=ctxItem('↺ Obróć o 90° w lewo','rot90ccw');
       if(single&&(single.type==='path'||single.type==='text')){
-        h+='<hr>';
         h+=ctxItem(`↔ Odbij poziomo${single.flipX?' ✓':''}`,'flipx');
         h+=ctxItem(`↕ Odbij pionowo${single.flipY?' ✓':''}`,'flipy');
       }
@@ -2485,6 +2501,8 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       case 'back': sendToBack(); break;
       case 'forward': bringForward(); break;
       case 'backward': sendBackward(); break;
+      case 'rot90cw': rotate90(1); break;
+      case 'rot90ccw': rotate90(-1); break;
       case 'group': groupSel(); break;
       case 'ungroup': ungroupSel(); break;
       case 'flipx': if(o){ o.flipX=!o.flipX; renderProps(); renderAll(); pushHistory(); scheduleLive3D(); } break;
