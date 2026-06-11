@@ -80,6 +80,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 .geo-engrave-txt{fill:var(--engrave);stroke:none}
 .geo-cut-txt{fill:transparent;stroke:var(--cut);stroke-width:1.4px;vector-effect:non-scaling-stroke}
 .geo-score-txt{fill:transparent;stroke:var(--score);stroke-width:1.4px;vector-effect:non-scaling-stroke}
+.geo-hole{fill:rgba(155,93,229,.22);stroke:#9b5de5;stroke-width:1.6px;stroke-dasharray:3 2;vector-effect:non-scaling-stroke}
 .sel-box{fill:none;stroke:var(--accent);stroke-width:1.3px;vector-effect:non-scaling-stroke;stroke-dasharray:5 3}
 .sel-handle{fill:#fff;stroke:var(--accent);stroke-width:1.3px;vector-effect:non-scaling-stroke}
 .sel-rot-line{stroke:var(--accent);stroke-width:1.3px;vector-effect:non-scaling-stroke}
@@ -510,7 +511,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
 <script>
 (function(){
   const SVG_NS='http://www.w3.org/2000/svg';
-  const COLORS={cut:'#ff2d2d',engrave:'#1c1c1c',score:'#2f7bd8'};
+  const COLORS={cut:'#ff2d2d',engrave:'#1c1c1c',score:'#2f7bd8',hole:'#9b5de5'};
   const FONTS=[
     ['"Playfair Display", serif','Playfair Display'],
     ['"Dancing Script", cursive','Dancing Script'],
@@ -647,7 +648,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       if(_silFill){ geo=`<path d="${o.d}" fill="${_silFill}" stroke="${_silFill}" stroke-width="0.6"${fr}/>`; }
       else if(forExport){ geo=`<path d="${o.d}"${exportShapeStyle(o)}${fr}/>`; }
       else if(state.depthView){ const dc=depthColor(o.depth||1); geo=`<path d="${o.d}" fill="${dc}" fill-opacity=".38" stroke="${dc}" stroke-width=".8" vector-effect="non-scaling-stroke"${fr}/>`; }
-      else { const cls=o.mode==='engrave'?'geo-engrave':o.mode==='score'?'geo-score':'geo-cut'; geo=`<path d="${o.d}" class="${cls}"${fr}/>`; }
+      else { const cls=o.role==='hole'?'geo-hole':(o.mode==='engrave'?'geo-engrave':o.mode==='score'?'geo-score':'geo-cut'); geo=`<path d="${o.d}" class="${cls}"${fr}/>`; }
       return `<g transform="${t}">${geo}</g>`;
     }
     const cx=o.x+o.w/2, cy=o.y+o.h/2;
@@ -678,11 +679,12 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       if(_silFill){ geo=`<path d="${d}" fill="${_silFill}" stroke="${_silFill}" stroke-width="0.6"/>`; }
       else if(forExport){ geo=`<path d="${d}"${exportShapeStyle(o)}/>`; }
       else if(state.depthView){ const dc=depthColor(o.depth||1); geo=`<path d="${d}" fill="${dc}" fill-opacity=".38" stroke="${dc}" stroke-width=".8" vector-effect="non-scaling-stroke"/>`; }
-      else { const cls=o.mode==='engrave'?'geo-engrave':o.mode==='score'?'geo-score':'geo-cut'; geo=`<path d="${d}" class="${cls}"/>`; }
+      else { const cls=o.role==='hole'?'geo-hole':(o.mode==='engrave'?'geo-engrave':o.mode==='score'?'geo-score':'geo-cut'); geo=`<path d="${d}" class="${cls}"/>`; }
     }
     return `<g${rot}>${geo}</g>`;
   }
   function exportShapeStyle(o){
+    if(o.role==='hole') return ` fill="none" stroke="${COLORS.hole}" stroke-width="0.12" stroke-dasharray="1.2 0.9"`;
     if(o.mode==='engrave') return ` fill="${COLORS.engrave}" stroke="none"`;
     if(o.mode==='score') return ` fill="none" stroke="${COLORS.score}" stroke-width="0.12" stroke-dasharray="1.2 0.9"`;
     return ` fill="none" stroke="${COLORS.cut}" stroke-width="0.12"`;
@@ -1936,6 +1938,12 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       <button class="cut ${o.mode==='cut'?'on':''}" data-mode="cut">Cięcie</button>
       <button class="engrave ${o.mode==='engrave'?'on':''}" data-mode="engrave">Grawer</button>
       <button class="score ${o.mode==='score'?'on':''}" data-mode="score">Nacięcie</button></div></div>`;
+    // role: pełny kształt vs otwór (wycięcie odejmowane od sylwetki warstwy)
+    if(BOOL_TYPES.includes(o.type)){
+      h+=`<div class="field"><label>Rola w warstwie</label><div class="seg" data-seg="role">
+        <button class="${o.role==='hole'?'':'on'}" data-role="fill">⬛ Pełny kształt</button>
+        <button class="${o.role==='hole'?'on':''}" data-role="hole">◯ Otwór (wycięcie)</button></div></div>`;
+    }
     // position/size
     if(o.type==='text'||o.type==='path'){
       h+=numField('Przesunięcie X (mm)','x',o,{step:1});
@@ -2197,6 +2205,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     if(shapeLockRatio) shapeLockRatio.addEventListener('change',()=>{ o.lockRatio=shapeLockRatio.checked; pushHistory(); });
     propsEl.querySelectorAll('[data-rot90]').forEach(b=>b.addEventListener('click',()=>rotate90(Number(b.getAttribute('data-rot90')))));
     propsEl.querySelectorAll('[data-seg="mode"] button').forEach(b=>b.addEventListener('click',()=>{ o.mode=b.getAttribute('data-mode'); renderProps(); renderObjects(); pushHistory(); }));
+    propsEl.querySelectorAll('[data-seg="role"] button').forEach(b=>b.addEventListener('click',()=>{ const r=b.getAttribute('data-role'); o.role=r==='hole'?'hole':undefined; renderProps(); renderAll(); scheduleLive3D(); pushHistory(); }));
     propsEl.querySelectorAll('[data-seg="flip"] button').forEach(b=>b.addEventListener('click',()=>{ o.flip=b.getAttribute('data-flip')==='1'; renderProps(); renderObjects(); pushHistory(); }));
     propsEl.querySelectorAll('[data-seg="flipaxis"] button').forEach(b=>b.addEventListener('click',()=>{
       const ax=b.getAttribute('data-flipaxis');
@@ -3134,13 +3143,55 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     const out=s1.slice(0,-1).concat(s2.slice(0,-1));
     return out.length>=3?out:pts;
   }
-  // Łączy obrys jednej warstwy: powłoki (duże kontury) sumuje, otwory (kontury wewnątrz
-  // powłok) zostawia jako osobne cięcia. Zwraca tablicę pierścieni do narysowania.
-  // dep = numer warstwy, dla której budujemy plik. Kontury z wyższych warstw (depth>dep)
-  // służą tylko jako "podpora" — jeśli mieszczą się w obrysie tej płyty, NIE tworzą
-  // dodatkowego otworu/linii (płyta pod nimi musi pozostać pełna, bo to na niej leżą).
+  // Łączy obrysy wielu poligonów metodą rasteryzacji + śledzenia konturów (Moore-Neighbor,
+  // ta sama technika co wektoryzacja tekstu — traceMaskPolys). W odróżnieniu od przecinania
+  // wielokątów (clipGH/unionAll) działa niezawodnie przy wielu nakładających się, mocno
+  // wklęsłych kształtach (gwiazdy, litery tekstu) — bez ryzyka zgubienia przecięć.
+  // fillGroups: tablica {shells,holes} (po jednej grupie na obiekt) — "holes" to dziury
+  // WŁASNE obiektu (np. wnętrze "a"/"o"), odejmowane tylko od JEGO sylwetki; jeśli inny
+  // obiekt też zajmuje to miejsce, suma "lighter" i tak je wypełni.
+  // holeCutouts: poligony obiektów oznaczonych jako "otwór" — odejmowane na końcu od
+  // całej scalonej sylwetki warstwy (prawdziwe wycięcie, niezależnie od tego co jest pod spodem).
+  function rasterMergeRings(fillGroups, holeCutouts){
+    const allPolys=[];
+    fillGroups.forEach(g=>{ g.shells.forEach(p=>allPolys.push(p)); g.holes.forEach(p=>allPolys.push(p)); });
+    holeCutouts.forEach(p=>allPolys.push(p));
+    const bb=polysBBoxMulti(allPolys);
+    if(!(bb.maxx>bb.minx) || !(bb.maxy>bb.miny)) return [];
+    const MAXDIM=1500, pad=2;
+    const spanW=bb.maxx-bb.minx, spanH=bb.maxy-bb.miny;
+    const res=Math.max(3, Math.min(12, MAXDIM/Math.max(spanW,spanH)));
+    const W=Math.max(1,Math.ceil(spanW*res))+pad*2, H=Math.max(1,Math.ceil(spanH*res))+pad*2;
+    const toPx=([x,y])=>[(x-bb.minx)*res+pad,(y-bb.miny)*res+pad];
+    const fillPath=(ctx,poly)=>{ ctx.beginPath(); poly.forEach((p,i)=>{ const [px,py]=toPx(p); i?ctx.lineTo(px,py):ctx.moveTo(px,py); }); ctx.closePath(); ctx.fill(); };
+    const finalCnv=document.createElement('canvas'); finalCnv.width=W; finalCnv.height=H;
+    const fctx=finalCnv.getContext('2d');
+    fillGroups.forEach(g=>{
+      if(!g.shells.length) return;
+      // każdy obiekt na własnym płótnie: wypełniamy jego powłoki, odejmujemy jego własne dziury,
+      // dopiero potem sumujemy "lighter" (OR) z resztą — dzięki temu dziura jednego obiektu
+      // nie kasuje materiału innego obiektu, który leży w tym samym miejscu
+      const tmp=document.createElement('canvas'); tmp.width=W; tmp.height=H;
+      const tctx=tmp.getContext('2d'); tctx.fillStyle='#fff';
+      g.shells.forEach(poly=>fillPath(tctx,poly));
+      if(g.holes.length){ tctx.globalCompositeOperation='destination-out'; tctx.fillStyle='#fff'; g.holes.forEach(poly=>fillPath(tctx,poly)); }
+      fctx.globalCompositeOperation='lighter';
+      fctx.drawImage(tmp,0,0);
+    });
+    if(holeCutouts.length){ fctx.globalCompositeOperation='destination-out'; fctx.fillStyle='#fff'; holeCutouts.forEach(poly=>fillPath(fctx,poly)); }
+    let img; try{ img=fctx.getImageData(0,0,W,H).data; }catch(e){ return []; }
+    const mask=new Uint8Array(W*H);
+    for(let i=0;i<W*H;i++) mask[i]=img[i*4+3]>=128?1:0;
+    const polys=traceMaskPolys(mask,W,H);
+    return polys.map(p=>simplifyRing(p,1.2).map(([px,py])=>[(px-pad)/res+bb.minx,(py-pad)/res+bb.miny])).filter(r=>r.length>=3);
+  }
+  // Przygotowuje obrys jednej warstwy: dla każdego obiektu wyznacza jego powłoki i własne
+  // dziury (np. wnętrze liter "a"/"o"), obiekty oznaczone jako "otwór" (o.role==='hole')
+  // trafiają osobno jako wycięcia odejmowane od całości. Następnie scala wszystko przez
+  // rasterMergeRings — bez sztucznych linii wewnętrznych na częściach wspólnych.
+  // dep = numer warstwy, dla której budujemy plik (objs to już elementy z warstw >= dep).
   function mergeLayerRings(objs, dep){
-    let rings=[];
+    const fillGroups=[], holeCutouts=[];
     objs.forEach(o=>{
       let polys=objSubPolys(o);
       if(o.type==='text' && !polys.length){
@@ -3148,23 +3199,44 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
         const b=objBBox(o), c={x:b.x+b.w/2,y:b.y+b.h/2}, rot=deg2rad(o.rotation||0);
         polys=[[[b.x,b.y],[b.x+b.w,b.y],[b.x+b.w,b.y+b.h],[b.x,b.y+b.h]].map(([x,y])=>{ const p=rotatePt(x,y,c.x,c.y,rot); return [p.x,p.y]; })];
       }
-      polys.forEach(r=>{ const sr=simplifyRing(r,0.15); if(sr.length>=3) rings.push({pts:sr, area:Math.abs(polyArea(sr)), c:polyCentroid(sr), oid:o.id}); });
+      const rings=polys.map(r=>simplifyRing(r,0.15)).filter(r=>r.length>=3);
+      if(!rings.length) return;
+      if(o.role==='hole'){ rings.forEach(r=>holeCutouts.push(r)); return; }
+      // kontur jest "dziurą własną" obiektu, jeśli leży wewnątrz większego konturu TEGO SAMEGO
+      // obiektu (np. wnętrze litery "O")
+      const meta=rings.map(r=>({pts:r, area:Math.abs(polyArea(r)), c:polyCentroid(r)}));
+      const shells=[], holes=[];
+      meta.forEach(r=>{
+        const isHole=meta.some(o2=>o2!==r && o2.area>r.area && pointInPoly(r.c,o2.pts));
+        (isHole?holes:shells).push(r.pts);
+      });
+      if(shells.length) fillGroups.push({shells,holes});
     });
-    if(!rings.length) return [];
-    rings.sort((a,b)=>b.area-a.area);
-    // "prawdziwy otwór" = kontur zagnieżdżony w WIĘKSZYM konturze TEGO SAMEGO obiektu
-    // (np. wnętrze litery "O") — to jedyny przypadek zostawiany jako osobna linia cięcia.
-    // Jeśli w tym miejscu jest jednak inny obiekt (z dowolnej warstwy), otwór znika
-    // (płyta musi tam zostać pełna) i trafia do scalenia razem z resztą -> bez sztucznych
-    // dziur/linii wewnętrznych przy nakładających się lub zagnieżdżonych kształtach.
-    const shells=[], holes=[];
-    rings.forEach(r=>{
-      const sameObjHole=rings.some(o=>o!==r && o.oid===r.oid && o.area>r.area && pointInPoly(r.c,o.pts));
-      const filledByOther=sameObjHole && rings.some(o=>o.oid!==r.oid && pointInPoly(r.c,o.pts));
-      (sameObjHole && !filledByOther ? holes : shells).push(r);
+    if(!fillGroups.length) return [];
+    // Grupowanie metodą "union-find" wg nakładania się obwiedni (bbox): rasteryzujemy
+    // TYLKO te grupy obiektów, które faktycznie się nakładają i wymagają scalenia.
+    // Obiekty bez kolizji zwracamy z dokładnymi konturami wektorowymi (bez utraty
+    // precyzji przez rasteryzację) — fill-rule:evenodd renderuje je poprawnie
+    // niezależnie od kierunku obrysu (shell/hole).
+    const items=fillGroups.map(g=>({fill:g, bb:polysBBoxMulti([...g.shells,...g.holes])}));
+    const holeItems=holeCutouts.map(p=>({hole:p, bb:polysBBoxMulti([p])}));
+    const all=[...items,...holeItems];
+    const parent=all.map((_,i)=>i);
+    const find=i=>parent[i]===i?i:(parent[i]=find(parent[i]));
+    const union=(a,b)=>{ a=find(a); b=find(b); if(a!==b) parent[a]=b; };
+    const bbOverlap=(a,b)=>a.minx<=b.maxx && a.maxx>=b.minx && a.miny<=b.maxy && a.maxy>=b.miny;
+    for(let i=0;i<all.length;i++) for(let j=i+1;j<all.length;j++) if(bbOverlap(all[i].bb,all[j].bb)) union(i,j);
+    const groupsByRoot=new Map();
+    all.forEach((it,i)=>{ const r=find(i); if(!groupsByRoot.has(r)) groupsByRoot.set(r,[]); groupsByRoot.get(r).push(it); });
+    const result=[];
+    groupsByRoot.forEach(groupItems=>{
+      const fg=groupItems.filter(it=>it.fill).map(it=>it.fill);
+      const hc=groupItems.filter(it=>it.hole).map(it=>it.hole);
+      if(!fg.length) return; // dziura bez materiału pod spodem - nie ma czego wycinać
+      if(fg.length===1 && !hc.length){ fg[0].shells.forEach(s=>result.push(s)); fg[0].holes.forEach(h=>result.push(h)); return; }
+      rasterMergeRings(fg,hc).forEach(r=>result.push(r));
     });
-    const merged=unionAll(shells.map(s=>s.pts));
-    return merged.concat(holes.map(h=>h.pts));
+    return result;
   }
   function buildSeparatedSVG(){
     const W=state.docW,H=state.docH;
@@ -3179,7 +3251,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       // kontur do wycięcia tej płyty: kształty (cięcie/nacięcie) ORAZ tekst (zawsze, niezależnie
       // od trybu) z warstw >= dep — scalone w jeden obrys bez wewnętrznych linii (unionAll),
       // bo wszystko co leży na/nad tą płytą wymaga pełnego materiału pod sobą
-      const cutObjs=vis.filter(o=>(o.depth||1)>=dep && (o.type==='text' || (BOOL_TYPES.includes(o.type) && o.mode!=='engrave')));
+      const cutObjs=vis.filter(o=>(o.depth||1)>=dep && (o.type==='text' || o.role==='hole' || (BOOL_TYPES.includes(o.type) && o.mode!=='engrave')));
       const rings=mergeLayerRings(cutObjs, dep);
       const cutPaths=rings.map(r=>`<path d="${polyToPathD(r)}" fill="none" stroke="${COLORS.cut}" stroke-width="0.3"/>`).join('');
       // tekst tej warstwy w trybie "grawer" — wypełniona zwektoryzowana sylwetka liter (do grawerowania).
@@ -3188,7 +3260,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
         .map(o=>{ const polys=objSubPolys(o);
           return polys.length ? `<path d="${polys.map(polyToPathD).join(' ')}" fill="${COLORS.engrave}" fill-rule="evenodd"/>` : objMarkup({...o,mode:'cut'},true); }).join('');
       // dekoracje (grawer) kształtów z tej warstwy — rysowane na wierzchu obrysu cięcia
-      const deco=vis.filter(o=>(o.depth||1)===dep && o.mode==='engrave' && o.type!=='text').map(o=>objMarkup(o,true)).join('');
+      const deco=vis.filter(o=>(o.depth||1)===dep && o.mode==='engrave' && o.type!=='text' && o.role!=='hole').map(o=>objMarkup(o,true)).join('');
       groups+=`<g class="warstwa-${dep}" data-warstwa="${dep}" transform="translate(${fmt(ox)} ${labelH})">`+
         `<text x="${fmt(W/2)}" y="-3" font-size="6" text-anchor="middle" fill="${col}" font-family="sans-serif">Warstwa ${dep} · ${fmt(layerMM(dep))} mm</text>`+
         cutPaths+textEngrave+deco+`</g>`;
