@@ -856,14 +856,22 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       gOverlay.innerHTML=s+guideLinesMarkup()+dragLabelMarkup();
       return;
     }
-    if(sel.length>1){                                           // wiele zaznaczonych: ramki + wspólny prostokąt, bez uchwytów
+    if(sel.length>1){                                           // wiele zaznaczonych: ramki + wspólny prostokąt + narożne uchwyty skalowania całej grupy
       let minx=Infinity,miny=Infinity,maxx=-Infinity,maxy=-Infinity, s='';
       sel.forEach(o=>{
         const bb=rotatedBBox(o); minx=Math.min(minx,bb.minx); miny=Math.min(miny,bb.miny); maxx=Math.max(maxx,bb.maxx); maxy=Math.max(maxy,bb.maxy);
         const b=objBBox(o), c={x:b.x+b.w/2,y:b.y+b.h/2};
-        s+=`<g transform="rotate(${fmt(o.rotation||0)} ${fmt(c.x)} ${fmt(c.y)})"><rect class="sel-box" x="${fmt(b.x)}" y="${fmt(b.y)}" width="${fmt(b.w)}" height="${fmt(b.h)}" style="opacity:.55"/></g>`;
+        const bx=Math.min(b.x,b.x+b.w), by=Math.min(b.y,b.y+b.h), bw=Math.abs(b.w), bh=Math.abs(b.h);
+        s+=`<g transform="rotate(${fmt(o.rotation||0)} ${fmt(c.x)} ${fmt(c.y)})"><rect class="sel-box" x="${fmt(bx)}" y="${fmt(by)}" width="${fmt(bw)}" height="${fmt(bh)}" style="opacity:.55"/></g>`;
       });
-      s=`<rect x="${fmt(minx)}" y="${fmt(miny)}" width="${fmt(maxx-minx)}" height="${fmt(maxy-miny)}" fill="none" stroke="#d8a14a" stroke-width="1.6px" vector-effect="non-scaling-stroke"/>`+s+guideLinesMarkup()+dragLabelMarkup();
+      const hr=state.view.w*0.011, hit=hr*2.4;
+      const corners=[['nw',minx,miny],['ne',maxx,miny],['se',maxx,maxy],['sw',minx,maxy]];
+      let hs='';
+      corners.forEach(([k,hx,hy])=>{
+        hs+=`<rect class="sel-handle" x="${fmt(hx-hr)}" y="${fmt(hy-hr)}" width="${fmt(hr*2)}" height="${fmt(hr*2)}" style="pointer-events:none"/>`;
+        hs+=`<rect x="${fmt(hx-hit)}" y="${fmt(hy-hit)}" width="${fmt(hit*2)}" height="${fmt(hit*2)}" fill="transparent" data-mhandle="${k}"/>`;
+      });
+      s=`<rect x="${fmt(minx)}" y="${fmt(miny)}" width="${fmt(maxx-minx)}" height="${fmt(maxy-miny)}" fill="none" stroke="#d8a14a" stroke-width="1.6px" vector-effect="non-scaling-stroke"/>`+s+hs+guideLinesMarkup()+dragLabelMarkup();
       gOverlay.innerHTML=s; return;
     }
     const o=sel[0];
@@ -874,7 +882,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     const hr=state.view.w*0.011; // visible handle radius (~constant on screen)
     const hit=hr*2.4;            // larger invisible hit area for easy touch grabbing
     let s=`<g transform="rotate(${fmt(o.rotation||0)} ${fmt(c.x)} ${fmt(c.y)})">`;
-    s+=`<rect class="sel-box" x="${fmt(b.x)}" y="${fmt(b.y)}" width="${fmt(b.w)}" height="${fmt(b.h)}"/>`;
+    s+=`<rect class="sel-box" x="${fmt(Math.min(b.x,b.x+b.w))}" y="${fmt(Math.min(b.y,b.y+b.h))}" width="${fmt(Math.abs(b.w))}" height="${fmt(Math.abs(b.h))}"/>`;
     const rotY=b.y-hr*4;
     s+=`<line class="sel-rot-line" x1="${fmt(c.x)}" y1="${fmt(b.y)}" x2="${fmt(c.x)}" y2="${fmt(rotY)}"/>`;
     s+=`<circle class="sel-rot" cx="${fmt(c.x)}" cy="${fmt(rotY)}" r="${fmt(hr*1.25)}" style="pointer-events:none"/>`;
@@ -1293,8 +1301,10 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     const docP=clientToDoc(e);
     if(state.tool==='pen'){ penAddPoint(docP); return; }
     const handle=e.target.getAttribute && e.target.getAttribute('data-handle');
+    const mhandle=e.target.getAttribute && e.target.getAttribute('data-mhandle');
     if(state.tool==='select'){
       if(handle){ startHandle(e,handle,docP); return; }
+      if(mhandle){ startMResize(e,mhandle,docP); return; }
       const grp=e.target.closest && e.target.closest('[data-id]');
       if(grp){
         const id=grp.getAttribute('data-id'); const o=state.objects.find(x=>x.id===id);
@@ -1380,6 +1390,46 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     if(handle==='rot'){ drag={mode:'rotate',o,c,startAng:o.rotation||0,startMouse:Math.atan2(docP.y-c.y,docP.x-c.x)}; return; }
     drag={mode:'resize',o,handle,b:{...b},c,rot:deg2rad(o.rotation||0),startFont:o.fontSize||24};
   }
+  // skalowanie całej grupy zaznaczonych elementów proporcjonalnie, ciągnąc za narożny uchwyt wspólnej ramki
+  function startMResize(e,handle,docP){
+    setCapture(e);
+    const sel=getSelected().filter(o=>!o.locked); if(sel.length<2) return;
+    let minx=Infinity,miny=Infinity,maxx=-Infinity,maxy=-Infinity;
+    sel.forEach(o=>{ const bb=rotatedBBox(o); minx=Math.min(minx,bb.minx); miny=Math.min(miny,bb.miny); maxx=Math.max(maxx,bb.maxx); maxy=Math.max(maxy,bb.maxy); });
+    const anchor={ x: handle.includes('w')?maxx:minx, y: handle.includes('n')?maxy:miny };
+    const startCorner={ x: handle.includes('w')?minx:maxx, y: handle.includes('n')?miny:maxy };
+    const startDist=Math.hypot(startCorner.x-anchor.x, startCorner.y-anchor.y)||1;
+    const items=sel.map(o=>{
+      const c0=objCenter(o);
+      const it={o,c0};
+      if(o.type==='path'){ it.sx0=o.sx||1; it.sy0=o.sy||1; }
+      else if(o.type==='text'){ it.fs0=o.fontSize||24; it.x0=o.x; it.y0=o.y; }
+      else { it.w0=o.w; it.h0=o.h; if(o.type==='rect') it.rx0=o.rx||0; }
+      return it;
+    });
+    drag={mode:'mresize', anchor, startDist, items};
+  }
+  // ustawia nowy środek i przeskalowane wymiary pojedynczego elementu podczas skalowania całej grupy (czynnik s)
+  function applyGroupScale(it,newCenter,s){
+    const o=it.o;
+    if(o.type==='path'){
+      const cx=(o.bx||0)+(o.bw||0)/2, cy=(o.by||0)+(o.bh||0)/2;
+      o.sx=it.sx0*s; o.sy=it.sy0*s;
+      o.x=newCenter.x-cx; o.y=newCenter.y-cy;
+    } else if(o.type==='text'){
+      o.fontSize=clamp(it.fs0*s,4,400);
+      o.x=newCenter.x - s*(it.c0.x-it.x0);
+      o.y=newCenter.y - s*(it.c0.y-it.y0);
+    } else if(o.type==='line'){
+      o.w=it.w0*s; o.h=it.h0*s;
+      o.x=newCenter.x-o.w/2; o.y=newCenter.y-o.h/2;
+    } else {
+      o.w=Math.max(0.5, it.w0*s);
+      o.h=Math.max(0.5, it.h0*s);
+      if(o.type==='rect' && it.rx0!=null) o.rx=Math.max(0, it.rx0*s);
+      o.x=newCenter.x-o.w/2; o.y=newCenter.y-o.h/2;
+    }
+  }
 
   window.addEventListener('pointermove', e=>{
     if(pointers.has(e.pointerId)) pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
@@ -1442,6 +1492,16 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       const rb=objBBox(drag.o);
       state.dragLabel={text:`${fmt(rb.w)} × ${fmt(rb.h)} mm`, x:docP.x, y:docP.y};
       renderObjects(); renderOverlay(); syncPropsLive();
+    } else if(drag.mode==='mresize'){
+      const a=drag.anchor;
+      const dist=Math.hypot(docP.x-a.x, docP.y-a.y)||0;
+      const s=clamp(dist/drag.startDist, 0.05, 50);
+      drag.items.forEach(it=>{
+        const newCenter={x:a.x+(it.c0.x-a.x)*s, y:a.y+(it.c0.y-a.y)*s};
+        applyGroupScale(it,newCenter,s);
+      });
+      state.dragLabel={text:`${fmt(s*100)}%`, x:docP.x, y:docP.y};
+      renderObjects(); renderOverlay(); syncPropsLive();
     } else if(drag.mode==='nodeMove'){
       const lp=docPtToLocal(drag.o, {x:snap(docP.x), y:snap(docP.y)});
       const pts=pathPolyPoints(drag.o.d);
@@ -1484,7 +1544,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       if(o.type==='line' && Math.abs(o.w)<2 && Math.abs(o.h)<2){ o.w=40; o.h=0; }
       state.tool='select'; syncToolButtons();
       renderAll(); pushHistory(); renderProps();
-    } else if(m==='move'||m==='resize'||m==='rotate'){
+    } else if(m==='move'||m==='resize'||m==='rotate'||m==='mresize'){
       state.guideLines=null; renderOverlay();
       pushHistory(); renderProps(); scheduleLive3D();
     } else if(m==='nodeMove'){
