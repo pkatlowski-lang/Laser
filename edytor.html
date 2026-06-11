@@ -496,6 +496,8 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
         <h4>Zaznaczenie i ruch</h4>
         <div class="sc-row"><span>Przesuń o 1 mm</span><span class="sc-keys"><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd></span></div>
         <div class="sc-row"><span>Przesuń o krok siatki</span><span class="sc-keys"><kbd>Shift</kbd>+strzałki</span></div>
+        <div class="sc-row"><span>Skaluj proporcjonalnie (uchwyt narożny)</span><span class="sc-keys"><kbd>Shift</kbd>+przeciągnij</span></div>
+        <div class="sc-row"><span>Obrót co 15°</span><span class="sc-keys"><kbd>Shift</kbd>+przeciągnij uchwyt obrotu</span></div>
         <div class="sc-row"><span>Zakończ ścieżkę (pióro)</span><span class="sc-keys"><kbd>Enter</kbd></span></div>
         <div class="sc-row"><span>Anuluj / zamknij okno</span><span class="sc-keys"><kbd>Esc</kbd></span></div>
         <div class="sc-row"><span>Menu kontekstowe</span><span class="sc-keys"><kbd>PPM</kbd></span></div>
@@ -1596,6 +1598,8 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       return;
     }
     const rot=d.rot, c=d.c, b=d.b, h=d.handle;
+    // Shift (lub trwale włączone "zachowaj proporcje" dla podstawowych kształtów) -> skalowanie z narożnika z zachowaniem b.w:b.h
+    const lockProportions = o.type!=='line' && (shift || (['rect','ellipse','polygon','star'].includes(o.type) && o.lockRatio));
     let nx,ny,nw,nh;
     if(rot===0){
       let x0=b.x,y0=b.y,x1=b.x+b.w,y1=b.y+b.h;
@@ -1603,11 +1607,21 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       if(h.includes('w')) x0=px; if(h.includes('e')) x1=px;
       if(h.includes('n')) y0=py; if(h.includes('s')) y1=py;
       nx=Math.min(x0,x1); ny=Math.min(y0,y1); nw=Math.max(Math.abs(x1-x0),1); nh=Math.max(Math.abs(y1-y0),1);
+      if(lockProportions && h.length===2){
+        const scale=Math.max(nw/(b.w||1), nh/(b.h||1));
+        nw=Math.max((b.w||1)*scale,1); nh=Math.max((b.h||1)*scale,1);
+        const fx=h.includes('w')?(b.x+b.w):b.x, fy=h.includes('n')?(b.y+b.h):b.y;
+        nx=h.includes('w')?fx-nw:fx; ny=h.includes('n')?fy-nh:fy;
+      }
     } else {
       // rotated -> center-fixed resize
       const pl=rotatePt(docP.x,docP.y,c.x,c.y,-rot);
       let halfW=Math.max(Math.abs(pl.x-c.x),0.5), halfH=Math.max(Math.abs(pl.y-c.y),0.5);
       if(h==='n'||h==='s') halfW=b.w/2; if(h==='e'||h==='w') halfH=b.h/2;
+      if(lockProportions && h.length===2){
+        const scale=Math.max(halfW/((b.w||1)/2), halfH/((b.h||1)/2));
+        halfW=((b.w||1)/2)*scale; halfH=((b.h||1)/2)*scale;
+      }
       nw=halfW*2; nh=halfH*2; nx=c.x-halfW; ny=c.y-halfH;
     }
     if(o.type==='path'){
