@@ -311,6 +311,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       <button class="tbtn" id="depthViewBtn" title="Tryb warstw 3D — pokoloruj elementy według warstwy głębokości (kliknij ponownie aby wyłączyć)">🎨 Warstwy</button>
       <button class="tbtn" id="preview3dBtn" title="Podgląd 3D — interaktywna wizualizacja projektu jako stos warstw materiału">🎯 Podgląd 3D</button>
       <button class="tbtn" id="boxGenBtn" title="Generator pudełka — parametryczne pudełko z łączeniami „na palec”, gotowe do wycięcia laserem">📦 Generator pudełka</button>
+      <button class="tbtn" id="hingeGenBtn" title="Generator zawiasu — wzór nacięć (living hinge), który pozwala wygiąć sztywny materiał">🪗 Zawias żywy</button>
       <button class="tbtn" id="exportBtn" style="background:linear-gradient(135deg,var(--accent),var(--accent-dark));border-color:var(--accent);color:#1a1308">⬇ Pobierz SVG</button>
       <button class="tbtn" id="exportDxfBtn" title="Eksportuj projekt jako plik DXF (do programów CNC/laser, np. LightBurn, AutoCAD)">⬇ Pobierz DXF</button>
       <button class="tbtn" id="export3dBtn" title="Eksport 3D — pobierz osobne SVG dla każdej warstwy głębokości i sklejaj je, by uzyskać efekt 3D">🧊 Eksport 3D</button>
@@ -468,6 +469,22 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     <div class="field"><label>Grubość materiału — T (mm)</label><input type="number" id="boxT" min="0.5" max="20" step="0.5" value="3"></div>
     <div class="field"><label>Rozmiar palca (mm)</label><input type="number" id="boxF" min="2" max="100" step="1" value="15"></div>
     <button type="button" class="tbtn" id="boxGenerateBtn" style="width:100%;justify-content:center;margin-top:6px">Generuj pudełko</button>
+  </div>
+</div>
+
+<div class="modal-ov" id="modalHinge">
+  <div class="modal-box" style="max-width:420px">
+    <button class="modal-close" id="modalHingeClose" title="Zamknij">✕</button>
+    <h3>🪗 Generator zawiasu (living hinge)</h3>
+    <p style="font-size:.8rem;color:var(--muted);margin:0 0 8px">Wygeneruj panel z siatką krótkich nacięć w układzie cegiełek — pozwala wygiąć sztywny materiał (sklejkę, akryl) w łuk.</p>
+    <div class="field"><label>Szerokość panelu (mm)</label><input type="number" id="hingeW" min="10" max="2000" step="1" value="100"></div>
+    <div class="field"><label>Wysokość panelu (mm)</label><input type="number" id="hingeH" min="10" max="2000" step="1" value="60"></div>
+    <div class="field"><label>Długość nacięcia (mm)</label><input type="number" id="hingeLen" min="2" max="200" step="1" value="8"></div>
+    <div class="field"><label>Szerokość nacięcia — kerf (mm)</label><input type="number" id="hingeKerf" min="0.2" max="5" step="0.1" value="1"></div>
+    <div class="field"><label>Odstęp poziomy między nacięciami (mm)</label><input type="number" id="hingePitchX" min="1" max="100" step="0.5" value="4"></div>
+    <div class="field"><label>Odstęp pionowy między rzędami (mm)</label><input type="number" id="hingePitchY" min="1" max="100" step="0.5" value="4"></div>
+    <div class="field"><label>Margines (mm)</label><input type="number" id="hingeMargin" min="0" max="100" step="1" value="5"></div>
+    <button type="button" class="tbtn" id="hingeGenerateBtn" style="width:100%;justify-content:center;margin-top:6px">Generuj zawias</button>
   </div>
 </div>
 
@@ -3511,6 +3528,46 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     state.objects.push(...newObjs); state.selectedIds=newObjs.map(o=>o.id);
     pushHistory(); renderAll(); renderProps(); zoomFit();
     modalBox.classList.remove('open');
+  });
+
+  /* ---------------- Generator zawiasu (living hinge) ---------------- */
+  // Wzór nacięć "na cegiełkę": rzędy krótkich prostokątnych szczelin, co drugi rząd
+  // przesunięty o pół odstępu — pozwala wygiąć sztywny materiał.
+  function buildLivingHingePattern(W,H,slitLen,kerf,pitchX,pitchY,margin){
+    let d='', count=0;
+    for(let y=margin, row=0; y+slitLen<=H-margin+1e-9; y+=pitchY, row++){
+      const offsetX=(row%2===0)?0:pitchX/2;
+      for(let x=margin+offsetX; x+kerf<=W-margin+1e-9; x+=pitchX){
+        d+=`M${fmt(x)} ${fmt(y)}L${fmt(x+kerf)} ${fmt(y)}L${fmt(x+kerf)} ${fmt(y+slitLen)}L${fmt(x)} ${fmt(y+slitLen)}Z`;
+        count++;
+      }
+    }
+    return {d,count};
+  }
+  const modalHinge=document.getElementById('modalHinge');
+  document.getElementById('hingeGenBtn').addEventListener('click',()=>modalHinge.classList.add('open'));
+  document.getElementById('modalHingeClose').addEventListener('click',()=>modalHinge.classList.remove('open'));
+  modalHinge.addEventListener('click',e=>{ if(e.target===modalHinge) modalHinge.classList.remove('open'); });
+  document.getElementById('hingeGenerateBtn').addEventListener('click',()=>{
+    const W=clamp(Number(document.getElementById('hingeW').value)||100,10,2000);
+    const H=clamp(Number(document.getElementById('hingeH').value)||60,10,2000);
+    const slitLen=clamp(Number(document.getElementById('hingeLen').value)||8,2,200);
+    const kerf=clamp(Number(document.getElementById('hingeKerf').value)||1,0.2,5);
+    const pitchX=clamp(Number(document.getElementById('hingePitchX').value)||4,1,100);
+    const pitchY=clamp(Number(document.getElementById('hingePitchY').value)||4,1,100);
+    const margin=clamp(Number(document.getElementById('hingeMargin').value)||5,0,100);
+    const {d,count}=buildLivingHingePattern(W,H,slitLen,kerf,pitchX,pitchY,margin);
+    if(!count){ alert('Przy tych parametrach nie zmieści się ani jedno nacięcie — zmniejsz margines, długość nacięcia lub odstępy.'); return; }
+    const px=20, py=20;
+    const panel={...defaultsFor('rect'),x:px,y:py,w:W,h:H,rx:0,mode:'cut',name:'Panel z zawiasem'};
+    const holes={id:uid(),type:'path',name:'Nacięcia zawiasu',d,fillRule:'nonzero',role:'hole',
+      bx:0,by:0,bw:W,bh:H,x:px,y:py,rotation:0,mode:'cut',visible:true,locked:false,depth:state.depth||1,repeat:{type:'none'}};
+    if(px+W>state.docW || py+H>state.docH){
+      applyDocSize(Math.max(state.docW,Math.ceil(px+W+5)), Math.max(state.docH,Math.ceil(py+H+5)));
+    }
+    state.objects.push(panel,holes); state.selectedIds=[panel.id,holes.id];
+    pushHistory(); renderAll(); renderProps(); zoomFit();
+    modalHinge.classList.remove('open');
   });
 
   /* ---------------- Gallery of bases ---------------- */
