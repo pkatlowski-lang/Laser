@@ -459,6 +459,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
         <div class="sc-row"><span>Kopiuj</span><span class="sc-keys"><kbd>Ctrl</kbd>+<kbd>C</kbd></span></div>
         <div class="sc-row"><span>Wklej</span><span class="sc-keys"><kbd>Ctrl</kbd>+<kbd>V</kbd></span></div>
         <div class="sc-row"><span>Duplikuj</span><span class="sc-keys"><kbd>Ctrl</kbd>+<kbd>D</kbd></span></div>
+        <div class="sc-row"><span>Duplikuj przeciągając</span><span class="sc-keys"><kbd>Alt</kbd>+przeciągnij</span></div>
         <div class="sc-row"><span>Usuń zaznaczone</span><span class="sc-keys"><kbd>Del</kbd></span></div>
         <div class="sc-row"><span>Zaznacz wszystko</span><span class="sc-keys"><kbd>Ctrl</kbd>+<kbd>A</kbd></span></div>
         <div class="sc-row"><span>Grupuj</span><span class="sc-keys"><kbd>Ctrl</kbd>+<kbd>G</kbd></span></div>
@@ -1362,6 +1363,22 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   }
   function startMove(e,o,docP){
     setCapture(e);
+    if(e.altKey){                                                 // Alt+przeciągnij = zostaw oryginał, przesuwaj duplikat
+      const sel=getSelected().filter(s=>!s.locked);
+      const idx=sel.indexOf(o);
+      const gidMap={};
+      const copies=sel.map(s=>{ const c=JSON.parse(JSON.stringify(s)); c.id=uid();
+        if(c.groupId){ if(!gidMap[c.groupId]) gidMap[c.groupId]=uid(); c.groupId=gidMap[c.groupId]; }
+        return c; });
+      state.objects.push(...copies);
+      state.selectedIds=copies.map(c=>c.id);
+      o=copies[idx]||copies[0];
+      renderAll(); renderProps();
+      const items=copies.map(s=>({o:s,ox:s.x,oy:s.y,bb:rotatedBBox(s)}));
+      const excl=items.map(it=>it.o.id);
+      drag={mode:'move', o, items, sx:docP.x, sy:docP.y, snapT:snapTargets(excl)};
+      return;
+    }
     const items=getSelected().filter(s=>!s.locked).map(s=>({o:s,ox:s.x,oy:s.y,bb:rotatedBBox(s)}));
     const excl=items.map(it=>it.o.id);
     drag={mode:'move', o, items, sx:docP.x, sy:docP.y, snapT:snapTargets(excl)};
