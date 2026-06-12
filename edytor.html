@@ -1844,7 +1844,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     setCapture(e); const o=getSel(); if(!o||o.locked) return;
     const b=objBBox(o), c={x:b.x+b.w/2,y:b.y+b.h/2};
     if(handle==='rot'){ drag={mode:'rotate',o,c,startAng:o.rotation||0,startMouse:Math.atan2(docP.y-c.y,docP.x-c.x)}; return; }
-    drag={mode:'resize',o,handle,b:{...b},c,rot:deg2rad(o.rotation||0),startFont:o.fontSize||24};
+    drag={mode:'resize',o,handle,b:{...b},c,rot:deg2rad(o.rotation||0),startFont:o.fontSize||24,rx0:o.rx||0};
     if(o.type==='text'){
       const nb=textNaturalBox(o);
       if(nb){
@@ -1891,7 +1891,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     } else {
       o.w=Math.max(0.5, it.w0*s);
       o.h=Math.max(0.5, it.h0*s);
-      if(o.type==='rect' && it.rx0!=null) o.rx=Math.max(0, it.rx0*s);
+      if(o.type==='rect' && it.rx0!=null) o.rx=Math.min(Math.max(0, it.rx0*s), Math.min(o.w,o.h)/2);
       o.x=newCenter.x-o.w/2; o.y=newCenter.y-o.h/2;
     }
   }
@@ -2104,6 +2104,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       o.x=nx+nw/2-lcx; o.y=ny+nh/2-lcy;
     } else {
       o.x=nx; o.y=ny; o.w=nw; o.h=nh;
+      if(o.type==='rect' && d.rx0) o.rx=Math.min(d.rx0, Math.min(o.w,o.h)/2);
     }
   }
 
@@ -2468,6 +2469,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   function setProp(o,path,val){
     if(path.startsWith('repeat.')){ o.repeat=o.repeat||{type:'none'}; o.repeat[path.slice(7)]=val; }
     else o[path]=val;
+    if(o.type==='rect' && (path==='w'||path==='h') && o.rx) o.rx=Math.min(o.rx, Math.min(o.w,o.h)/2);
   }
   function bindProps(){
     const o=getSel(); if(!o) return;
@@ -2484,6 +2486,15 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
           const otherProp=path==='w'?'h':'w';
           o[otherProp]=Math.max(0.01, Math.round((val/(path==='w'?oldW:oldH))*(path==='w'?oldH:oldW)*100)/100);
           const otherInp=propsEl.querySelector(`[data-prop="${otherProp}"]`); if(otherInp) otherInp.value=fmt(o[otherProp]);
+        }
+        // keep the corner-radius slider's range/value/label in sync with the (possibly re-clamped) rx
+        // after w/h change, without rebuilding the whole props panel (which would steal input focus)
+        if(o.type==='rect' && (path==='w'||path==='h')){
+          const rxMax=Math.min(o.w,o.h)/2;
+          if((o.rx||0)>rxMax) o.rx=rxMax;
+          const rxInp=propsEl.querySelector('input[data-prop="rx"]');
+          if(rxInp){ rxInp.max=fmt(rxMax); rxInp.value=fmt(o.rx||0); }
+          const rxOut=propsEl.querySelector('[data-out="rx"]'); if(rxOut) rxOut.textContent=fmt(o.rx||0);
         }
         const out=propsEl.querySelector(`[data-out="${CSS.escape(path)}"]`); if(out) out.textContent=fmt(val);
         renderObjects(); renderOverlay();
