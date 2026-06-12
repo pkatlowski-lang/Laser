@@ -664,6 +664,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     <button class="modal-close" id="modalQuoteClose" title="Zamknij">✕</button>
     <h3>💰 Wycena projektu</h3>
     <div class="field"><label>Materiał</label><select id="quoteMat"></select></div>
+    <div class="sum-stats" id="quoteStats"></div>
     <div class="quote-price" id="quotePrice">–</div>
     <p style="font-size:.74rem;color:var(--muted);margin:10px 0 0;line-height:1.5">Cena końcowa za wykonanie projektu z wybranego materiału — obejmuje materiał, pracę lasera i pakowanie.</p>
   </div>
@@ -3773,9 +3774,16 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   quoteMatSel.innerHTML=Object.entries(QUOTE_MATERIALS).map(([k,m])=>`<option value="${k}">${m.label}</option>`).join('');
   function renderQuote(){
     const priceEl=document.getElementById('quotePrice');
+    const statsEl=document.getElementById('quoteStats');
     const hasWork=state.objects.some(o=>o.visible!==false && o.type!=='image');
-    if(!hasWork){ priceEl.textContent='Brak elementów do wyceny — narysuj projekt na płycie.'; priceEl.classList.add('quote-empty'); return; }
+    if(!hasWork){ priceEl.textContent='Brak elementów do wyceny — narysuj projekt na płycie.'; priceEl.classList.add('quote-empty'); statsEl.innerHTML=''; return; }
     priceEl.classList.remove('quote-empty');
+    const mat=QUOTE_MATERIALS[quoteMatSel.value];
+    const timeMin=quotePathLen()/mat.speed;
+    const areaCm2=quoteMaterialArea();
+    statsEl.innerHTML=
+      `<div class="sum-row"><span>⏱ Czas cyklu (praca lasera)</span><span class="sum-val">${formatTime(timeMin)}</span></div>`
+      +`<div class="sum-row"><span>📐 Powierzchnia materiału</span><span class="sum-val">${String(fmt(areaCm2)).replace('.',',')} cm² (${String(fmt(areaCm2/10000)).replace('.',',')} m²)</span></div>`;
     priceEl.textContent=computeQuote(quoteMatSel.value).toFixed(2).replace('.',',')+' zł';
   }
   document.getElementById('quoteBtn').addEventListener('click',()=>{ renderQuote(); modalQuote.classList.add('open'); });
