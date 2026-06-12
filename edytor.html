@@ -579,6 +579,8 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
         <div class="sc-row"><span>Przesuń o krok siatki</span><span class="sc-keys"><kbd>Shift</kbd>+strzałki</span></div>
         <div class="sc-row"><span>Skaluj proporcjonalnie (uchwyt narożny)</span><span class="sc-keys"><kbd>Shift</kbd>+przeciągnij</span></div>
         <div class="sc-row"><span>Obrót co 15°</span><span class="sc-keys"><kbd>Shift</kbd>+przeciągnij uchwyt obrotu</span></div>
+        <div class="sc-row"><span>Obróć o 5°</span><span class="sc-keys"><kbd>,</kbd> / <kbd>.</kbd></span></div>
+        <div class="sc-row"><span>Obróć o 1° (precyzyjnie)</span><span class="sc-keys"><kbd>Shift</kbd>+<kbd>,</kbd> / <kbd>Shift</kbd>+<kbd>.</kbd></span></div>
         <div class="sc-row"><span>Zakończ ścieżkę (pióro)</span><span class="sc-keys"><kbd>Enter</kbd></span></div>
         <div class="sc-row"><span>Anuluj / zamknij okno</span><span class="sc-keys"><kbd>Esc</kbd></span></div>
         <div class="sc-row"><span>Menu kontekstowe</span><span class="sc-keys"><kbd>PPM</kbd></span></div>
@@ -3149,6 +3151,13 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       selArr.forEach(o=>{ o.x+=dx; o.y+=dy; });
       renderObjects(); renderOverlay(); syncPropsLive(); pushHistory(); scheduleLive3D(); return;
     }
+    // precyzyjny obrót zaznaczenia: , / . = -5°/+5°, Shift+, / Shift+. (znaki < / >) = -1°/+1°
+    if(selArr.length && (e.key===','||e.key==='.'||e.key==='<'||e.key==='>')){
+      e.preventDefault();
+      const dir=(e.key==='.'||e.key==='>')?1:-1;
+      const step=e.shiftKey?1:5;
+      rotateBy(dir*step); return;
+    }
     const map={v:'select',h:'pan',r:'rect',o:'ellipse',p:'polygon',s:'star',l:'line',n:'pen',t:'text'};
     if(map[e.key.toLowerCase()]){ if(state.penDraft) penCancel(); state.tool=map[e.key.toLowerCase()]; syncToolButtons(); }
   });
@@ -3192,6 +3201,12 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   function rotate90(dir){
     const sel=getSelected().filter(o=>!o.locked); if(!sel.length) return;
     sel.forEach(o=>{ o.rotation=((((o.rotation||0)+dir*90)%360)+360)%360; });
+    renderObjects(); renderOverlay(); renderProps(); pushHistory(); scheduleLive3D();
+  }
+  // precyzyjny obrót o deltaDeg (np. 5° klawiszami , / . , Shift = 1°) wokół własnego środka elementu
+  function rotateBy(deltaDeg){
+    const sel=getSelected().filter(o=>!o.locked); if(!sel.length) return;
+    sel.forEach(o=>{ o.rotation=((((o.rotation||0)+deltaDeg)%360)+360)%360; });
     renderObjects(); renderOverlay(); renderProps(); pushHistory(); scheduleLive3D();
   }
   const ctxMenu=document.getElementById('ctxMenu');
