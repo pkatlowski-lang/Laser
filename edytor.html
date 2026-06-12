@@ -123,6 +123,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 .field .row2{display:flex;gap:8px}
 .field input[type=number],.field input[type=text],.field select{width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:inherit;font-size:.85rem}
 .field input:focus,.field select:focus{outline:none;border-color:var(--accent)}
+#props fieldset:disabled{opacity:.5}
+#props fieldset:disabled,#props fieldset:disabled *{cursor:not-allowed}
 .field .check-label{display:flex;align-items:center;gap:6px;font-size:.78rem;font-weight:500;text-transform:none;letter-spacing:normal;color:var(--text);white-space:nowrap}
 .field .check-label input[type=checkbox]{width:auto;accent-color:var(--accent)}
 .range-wrap{display:flex;align-items:center;gap:10px}
@@ -2314,6 +2316,8 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     if(!o){ propsEl.innerHTML=`<div class="empty-note">Nic nie zaznaczono.<br><br>Wybierz narzędzie u góry i narysuj kształt na płycie, albo kliknij gotowy szablon po lewej. Potem zaznacz element, aby zmieniać jego rozmiar, obrót, tryb (cięcie / grawer / nacięcie) i powielanie.<br><br>Aby zaznaczyć kilka elementów naraz: trzymaj <strong>Shift</strong> i klikaj, albo zaznacz je <strong>ramką</strong> na pustym polu.</div>`; return; }
     if(o.type==='image'){ renderImageProps(o); return; }
     let h='';
+    // nazwa elementu (widoczna też w panelu „Warstwy”)
+    h+=`<div class="field"><label>Nazwa</label><input type="text" data-prop="name" value="${escapeXml(o.name||'')}" placeholder="${escapeXml(autoName(o))}"></div>`;
     // mode
     h+=`<div class="field"><label>Tryb (operacja lasera)</label><div class="seg" data-seg="mode">
       <button class="cut ${o.mode==='cut'?'on':''}" data-mode="cut">Cięcie</button>
@@ -2322,8 +2326,9 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     // role: pełny kształt vs otwór (wycięcie odejmowane od sylwetki warstwy)
     if(BOOL_TYPES.includes(o.type)){
       h+=`<div class="field"><label>Rola w warstwie</label><div class="seg" data-seg="role">
-        <button class="${o.role==='hole'?'':'on'}" data-role="fill">⬛ Pełny kształt</button>
-        <button class="${o.role==='hole'?'on':''}" data-role="hole">◯ Otwór (wycięcie)</button></div></div>`;
+        <button class="${o.role==='hole'?'':'on'}" data-role="fill" title="Element jest pełnym, wypełnionym kształtem warstwy">⬛ Pełny kształt</button>
+        <button class="${o.role==='hole'?'on':''}" data-role="hole" title="Kontur tego elementu zostanie wycięty (odjęty) z sylwetki warstwy 3D - np. otwór montażowy">◯ Otwór (wycięcie)</button></div>
+        ${o.role==='hole'?'<p style="font-size:.72rem;color:var(--muted);margin-top:4px;line-height:1.5">Ten element wycina dziurę w pełnych kształtach tej samej warstwy 3D (np. otwór na śrubę) - sam nie jest wyświetlany jako odrębny element.</p>':''}</div>`;
     }
     // position/size
     if(o.type==='text'||o.type==='path'){
@@ -2438,13 +2443,14 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
         <span style="font-size:.7rem;color:var(--muted);margin-left:6px">${fmt(layerMM(dep))} mm grubości</span>
       </div>
     </div>`;
-    propsEl.innerHTML=h;
+    propsEl.innerHTML=lockedWrap(h,o);
     bindProps();
   }
   /* ---- Właściwości obrazu pomocniczego (kalka do przerysowania) ---- */
   function renderImageProps(o){
     let h='';
     h+=`<div class="empty-note" style="padding-bottom:4px">🖼 Obraz pomocniczy — widoczny tylko w edytorze, nie jest cięty ani uwzględniany w eksporcie SVG / podglądzie 3D.</div>`;
+    h+=`<div class="field"><label>Nazwa</label><input type="text" data-prop="name" value="${escapeXml(o.name||'')}" placeholder="${escapeXml(autoName(o))}"></div>`;
     h+=`<div class="field"><label>Pozycja X (mm)</label><input type="number" data-prop="x" value="${fmt(o.x)}" step="1"></div>`;
     h+=`<div class="field"><label>Pozycja Y (mm)</label><input type="number" data-prop="y" value="${fmt(o.y)}" step="1"></div>`;
     h+=`<div class="field"><label>Szerokość (mm)</label><input type="number" id="imgW" value="${fmt(o.w)}" min="1" step="1"></div>`;
@@ -2453,7 +2459,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     h+=rangeField('Obrót (°)','rotation',o.rotation||0,0,360,1,o);
     h+=rangeField('Przezroczystość (%)','opacity',o.opacity??100,0,100,1);
     h+=`<div class="field"><button type="button" id="imgReplaceBtn" class="tbtn" style="width:100%;justify-content:center">🔄 Zamień obraz</button></div>`;
-    propsEl.innerHTML=h;
+    propsEl.innerHTML=lockedWrap(h,o);
     bindProps();
     bindImageProps(o);
   }
@@ -2552,6 +2558,13 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     else o[path]=val;
     if(o.type==='rect' && (path==='w'||path==='h') && o.rx) o.rx=Math.min(o.rx, Math.min(o.w,o.h)/2);
   }
+  // Gdy element jest zablokowany (o.locked), pole właściwości jest tylko do odczytu -
+  // <fieldset disabled> jednym ruchem wyłącza wszystkie inputy/przyciski w panelu,
+  // a baner na górze tłumaczy, dlaczego nie reagują na kliknięcia.
+  function lockedWrap(h,o){
+    if(!o.locked) return h;
+    return `<div class="empty-note" style="background:rgba(255,170,60,.12);border:1px solid rgba(255,170,60,.35);border-radius:8px;padding:8px 10px;margin:0 0 4px">🔒 Element zablokowany — odblokuj go w panelu „Warstwy” (ikona 🔒/🔓), aby edytować właściwości.</div><fieldset disabled style="border:0;padding:0;margin:0">${h}</fieldset>`;
+  }
   function bindProps(){
     const o=getSel(); if(!o) return;
     propsEl.querySelectorAll('[data-prop]').forEach(inp=>{
@@ -2560,6 +2573,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       const ev=inp.type==='range'?'input':'change';
       inp.addEventListener(ev, ()=>{
         let val=inp.value; if(isNum) val=Number(val);
+        if(path==='name'){ o.name=val; renderLayers(); pushHistory(); return; }
         if(path==='repeat.type'){ o.repeat=normalizeRepeat(val,o.repeat); renderProps(); renderObjects(); renderOverlay(); if(inp.type!=='range') pushHistory(); return; }
         // szerokość/wysokość nie mogą spaść do zera/ujemnej - pole ma min="1",
         // ale wpisanie 0/"-5"/"" w zdarzeniu change nie jest przez przeglądarkę
@@ -4305,6 +4319,22 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
 
   document.getElementById('galleryUpload').addEventListener('change', e => {
     const f=e.target.files[0]; if(f) importSvgFile(f); e.target.value='';
+  });
+
+  // Przeciągnij i upuść pliki SVG (kształty wektorowe) lub obrazy (PNG/JPG jako
+  // kalka pomocnicza do przerysowania) bezpośrednio na płytę roboczą.
+  const stageEl=canvas.closest('.stage');
+  ['dragenter','dragover'].forEach(evt=>stageEl.addEventListener(evt, e=>{
+    if(!e.dataTransfer || !e.dataTransfer.types.includes('Files')) return;
+    e.preventDefault(); e.dataTransfer.dropEffect='copy';
+  }));
+  stageEl.addEventListener('drop', e=>{
+    const files=e.dataTransfer && e.dataTransfer.files; if(!files || !files.length) return;
+    e.preventDefault();
+    for(const file of files){
+      if(/svg/i.test(file.type) || /\.svg$/i.test(file.name)) importSvgFile(file);
+      else if(/^image\//.test(file.type)) importImageFile(file);
+    }
   });
 
   /* ---------------- Init ---------------- */
