@@ -139,6 +139,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 .empty-note{padding:8px 16px 20px;font-size:.82rem;color:var(--muted);line-height:1.6}
 
 /* ---- Layers ---- */
+.layer-search{width:calc(100% - 20px);margin:0 10px 8px;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:inherit;font-size:.8rem;box-sizing:border-box}
+.layer-search:focus{outline:none;border-color:var(--accent)}
 .layers{display:flex;flex-direction:column;gap:3px;padding:0 10px 14px}
 .layer{display:flex;align-items:center;gap:6px;padding:7px 8px;border-radius:7px;border:1.5px solid transparent;background:var(--surface2);cursor:pointer}
 .layer.sel{border-color:var(--accent)}
@@ -396,6 +398,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       <div class="depth-legend" id="depthLegend"></div>
       <p class="dl-note">W{n} = zaznacz warstwę · pole mm = grubość materiału · 👁 = ukryj. Grubsza warstwa jest wyżej w wizualizacji 3D.</p>
       <h2>Kolejność elementów</h2>
+      <input type="text" id="layerSearch" class="layer-search" placeholder="🔍 Szukaj elementu po nazwie…">
       <div class="layers" id="layers"></div>
       <div class="legend">
         <span><i class="li-cut"></i> cięcie</span>
@@ -3055,9 +3058,14 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
 
   /* ---------------- Layers panel ---------------- */
   const layersEl=document.getElementById('layers');
+  const layerSearchEl=document.getElementById('layerSearch');
+  layerSearchEl.addEventListener('input',renderLayers);
   function renderLayers(){
     if(!state.objects.length){ layersEl.innerHTML=`<div style="padding:4px 6px;font-size:.78rem;color:var(--muted)">Brak elementów.</div>`; return; }
-    layersEl.innerHTML=state.objects.slice().reverse().map(o=>{
+    const q=(layerSearchEl.value||'').trim().toLowerCase();
+    const list=q?state.objects.filter(o=>autoName(o).toLowerCase().includes(q)):state.objects;
+    if(!list.length){ layersEl.innerHTML=`<div style="padding:4px 6px;font-size:.78rem;color:var(--muted)">Brak elementów spełniających wyszukiwanie.</div>`; return; }
+    layersEl.innerHTML=list.slice().reverse().map(o=>{
       const sw=o.mode==='engrave'?'sw-engrave':o.mode==='score'?'sw-score':o.mode==='reference'?'sw-reference':'sw-cut';
       const d=o.depth||1; const dc=d<=6?`d${d}`:'dN';
       const dbadge=`<span class="d-badge ${dc}" title="Warstwa 3D ${d}">W${d}</span>`;
