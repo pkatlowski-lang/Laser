@@ -1297,13 +1297,16 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     return pts;
   }
   // Zwraca OSOBNY wielokąt dla każdej subścieżki (M...) — dzięki temu otwory nie tworzą zygzaków.
-  function objSubPolys(o){
-    if(o.type==='text') return textOutlinePolys(o);
-    let d;
-    if(o.type==='path') d=o.d; else if(BOOL_TYPES.includes(o.type)) d=shapeD(o); else return [];
-    if(!d) return [];
+  const _subPolysLocalCache=new Map();
+  // surowe wierzchołki podścieżek `d` w lokalnym układzie (przed transformObjPts) — zależą
+  // tylko od `d`, więc cache'ujemy je: dla ścieżek z dziesiątkami krzywych (zaimportowane SVG)
+  // próbkowanie przez getTotalLength/getPointAtLength trwało sekundy i powtarzało się przy
+  // KAŻDYM odświeżeniu podglądu 3D, nawet gdy zmieniał się tylko inny obiekt
+  function objSubPolysLocal(d){
+    let polys=_subPolysLocalCache.get(d);
+    if(polys!==undefined) return polys;
     const subs=d.match(/[Mm][^Mm]*/g)||[d];
-    const out=[];
+    polys=[];
     for(const sd of subs){
       // szybka ścieżka dla czystych łamanych M/L/Z (np. z polyToPathD — pudełko, koło
       // zębate, zawias): odczytujemy wierzchołki wprost z `d`. Dla ścieżek z mnóstwem
@@ -1311,16 +1314,25 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       if(/^[MLZ0-9.\-,\s]+$/.test(sd)){
         const nums=(sd.match(/-?\d+(?:\.\d+)?/g)||[]).map(Number);
         const pts=[]; for(let i=0;i+1<nums.length;i+=2) pts.push([nums[i],nums[i+1]]);
-        if(pts.length>=3){ out.push(transformObjPts(o, pts)); continue; }
+        if(pts.length>=3){ polys.push(pts); continue; }
       }
       const path=document.createElementNS(SVG_NS,'path'); path.setAttribute('d',sd);
       let len; try{ len=path.getTotalLength(); }catch(e){ continue; }
       if(len<0.5) continue;
       const n=Math.max(24,Math.min(480,Math.ceil(len/0.6))), pts=[];
       for(let i=0;i<n;i++){ const p=path.getPointAtLength(len*i/n); pts.push([p.x,p.y]); }
-      out.push(transformObjPts(o, pts));
+      polys.push(pts);
     }
-    return out;
+    if(_subPolysLocalCache.size>200) _subPolysLocalCache.clear();
+    _subPolysLocalCache.set(d, polys);
+    return polys;
+  }
+  function objSubPolys(o){
+    if(o.type==='text') return textOutlinePolys(o);
+    let d;
+    if(o.type==='path') d=o.d; else if(BOOL_TYPES.includes(o.type)) d=shapeD(o); else return [];
+    if(!d) return [];
+    return objSubPolysLocal(d).map(pts=>transformObjPts(o, pts.map(p=>p.slice())));
   }
   // Kontury obiektu (objSubPolys) z uwzględnieniem powieleń (repeat) — każda kopia
   // (translate/rotate/lustro z repeatTransforms) jako osobny zestaw poligonów
@@ -4154,7 +4166,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   window.addEventListener('resize',()=>{ syncViewAspect(); applyView(); renderOverlay(); });
 
   // Hak debugowy do testów (Playwright) — bez wpływu na działanie edytora
-  window.__lzr={state, buildSeparatedSVG, buildLayerScene, mergeLayerRings, unionAll, objSubPolys, objSubPolysRepeated, textOutlinePolys, objBBox, rotatedBBox, selBBox, polyArea, polysBBoxMulti, polyToPathD, renderAll, updateLive3D, renderProps, select, defaultsFor, zoomFit, repeatTransforms, exportSVG, buildGearPoints, simplifyRing, rasterizeTextOutlines, textNaturalBox, getTextRaster};
+  window.__lzr={state, buildSeparatedSVG, buildLayerScene, mergeLayerRings, unionAll, objSubPolys, objSubPolysLocal, objSubPolysRepeated, textOutlinePolys, objBBox, rotatedBBox, selBBox, polyArea, polysBBoxMulti, polyToPathD, renderAll, updateLive3D, renderProps, select, defaultsFor, zoomFit, repeatTransforms, exportSVG, buildGearPoints, simplifyRing, rasterizeTextOutlines, textNaturalBox, getTextRaster};
 })();
 </script>
 </body>
