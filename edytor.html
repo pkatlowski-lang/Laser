@@ -813,7 +813,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     let geo;
     if(o.type==='text'){
       const fs=o.fontSize||24;
-      const yBase=o.y + fs*0.34; // o.y stored as vertical center for text
+      const yBase=textBaselineY(o); // linia bazowa pierwszego wiersza (o.y to środek bloku tekstu)
       const deco=`${o.bold?'font-weight:700;':''}${o.italic?'font-style:italic;':''}${o.underline?'text-decoration:underline;':''}`;
       let cls='', styleCss='';
       if(_silFill) styleCss=`fill:${_silFill};stroke:${_silFill};stroke-width:0.6px;`;
@@ -823,7 +823,12 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       styleCss+=deco;
       const clsAttr=cls?` class="${cls}"`:'';
       const styleAttr=styleCss?` style="${styleCss}"`:'';
-      let txt=`<text x="${fmt(o.x)}" y="${fmt(yBase)}" text-anchor="middle" font-family='${o.font}' font-size="${fmt(fs)}"${clsAttr}${styleAttr}>${escapeXml(o.text||'')}</text>`;
+      const lines=(o.text||'').split('\n');
+      // każdy wiersz to osobny <tspan x="..."> -> nowy "text chunk" w SVG, więc
+      // text-anchor="middle" centruje KAŻDY wiersz niezależnie (jak w Cuttle/Illustrator)
+      const content=lines.length<2 ? escapeXml(o.text||'') : lines.map((ln,i)=>
+        `<tspan x="${fmt(o.x)}"${i>0?' dy="1.2em"':''}>${escapeXml(ln)}</tspan>`).join('');
+      let txt=`<text x="${fmt(o.x)}" y="${fmt(yBase)}" text-anchor="middle" font-family='${o.font}' font-size="${fmt(fs)}"${clsAttr}${styleAttr}>${content}</text>`;
       const tsx=(o.tsx||1)*(o.flipX?-1:1), tsy=(o.tsy||1)*(o.flipY?-1:1);
       if(tsx!==1||tsy!==1) txt=`<g transform="translate(${fmt(o.x)} ${fmt(yBase)}) scale(${fmt(tsx)} ${fmt(tsy)}) translate(${fmt(-o.x)} ${fmt(-yBase)})">${txt}</g>`;
       geo=txt;
@@ -968,6 +973,15 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     el.innerHTML=repeatTransforms(o).map(t=> t? `<g transform="${t}">${inner}</g>` : inner).join('');
   }
 
+  // Wielowierszowy tekst: o.y to "środek" całego bloku tekstu (jak dotychczas dla 1 linii),
+  // a linia bazowa pierwszego wiersza jest tak liczona, by ŚREDNIA z linii bazowych
+  // wszystkich N wierszy wypadała w tym samym miejscu co linia bazowa dla N=1
+  // (o.y + 0.34*fs) — dzięki temu wzór redukuje się dokładnie do poprzedniego dla N=1
+  // (zero regresji) i zachowuje intuicyjny środek bloku dla N>1.
+  function textLineCount(o){ return Math.max(1,(o.text||'').split('\n').length); }
+  function textAnchorOffset(o){ const fs=o.fontSize||24; return fs*(0.94-0.6*textLineCount(o)); }
+  function textBaselineY(o){ return o.y + textAnchorOffset(o); }
+
   // measured/analytic local (unrotated) bbox of an object
   function objBBox(o){
     if(o.type==='path'){
@@ -976,13 +990,14 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       return {x:(o.x||0)+cx-w/2, y:(o.y||0)+cy-h/2, w, h};
     }
     if(o.type==='text'){
-      const fs=o.fontSize||24, tsx=(o.tsx||1)*(o.flipX?-1:1), tsy=(o.tsy||1)*(o.flipY?-1:1), ax=o.x, ay=o.y+fs*0.34;
+      const fs=o.fontSize||24, tsx=(o.tsx||1)*(o.flipX?-1:1), tsy=(o.tsy||1)*(o.flipY?-1:1), ax=o.x, ay=textBaselineY(o);
       const nb=textNaturalBox(o);
       if(nb){
         const x1=ax+nb.offX*tsx, x2=x1+nb.width*tsx, y1=ay+nb.offY*tsy, y2=y1+nb.height*tsy;
         return {x:Math.min(x1,x2), y:Math.min(y1,y2), w:Math.abs(nb.width*tsx), h:Math.abs(nb.height*tsy)};
       }
-      const w=((o.text||'').length*fs*0.55||fs)*Math.abs(tsx), h=fs*Math.abs(tsy);
+      const lines=(o.text||'').split('\n'), N=lines.length, maxLen=Math.max(1,...lines.map(l=>l.length));
+      const w=(maxLen*fs*0.55||fs)*Math.abs(tsx), h=(fs*(1+(N-1)*1.2))*Math.abs(tsy);
       return {x:o.x-w/2,y:o.y-h/2,w:w,h:h};
     }
     return {x:o.x,y:o.y,w:o.w,h:o.h};
@@ -1512,20 +1527,29 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     const text=(o.text||'');
     if(!text.trim()) return null;
     const fs=Math.max(1,o.fontSize||24);
+    const lines=text.split('\n');
+    const N=lines.length;
     let SCALE=6;
-    let gh=Math.ceil(fs*2.4*SCALE)+8;
+    // gh = wysokość WSPÓLNEGO canvasu obejmująca wszystkie wiersze: pierwszy wiersz
+    // dostaje pełną wysokość glifu (jak dla N=1), kolejne wiersze przesuwają linię
+    // bazową o 1.2*fs (lineStep) w dół, więc canvas musi być o tyle wyższy.
+    const calcGh=s=>Math.ceil(fs*2.4*s)+8+Math.ceil((N-1)*fs*1.2*s);
+    let gh=calcGh(SCALE);
     const MAXDIM=1400;
-    if(gh>MAXDIM){ SCALE=Math.max(1,SCALE*MAXDIM/gh); gh=Math.ceil(fs*2.4*SCALE)+8; }
+    if(gh>MAXDIM){ SCALE=Math.max(1,SCALE*MAXDIM/gh); gh=calcGh(SCALE); }
+    const lineGh=Math.ceil(fs*2.4*SCALE)+8; // wysokość pojedynczego wiersza (jak dla N=1)
+    const lineStep=fs*1.2*SCALE;
     const fontStr=`${o.italic?'italic ':''}${o.bold?'bold ':''}${(fs*SCALE).toFixed(2)}px ${o.font}`;
     const mctx=document.createElement('canvas').getContext('2d');
     mctx.font=fontStr;
-    const chars=[...text];
-    const widths=chars.map(ch=>mctx.measureText(ch).width);
-    const totalW=mctx.measureText(text).width || widths.reduce((a,b)=>a+b,0);
+    const linesChars=lines.map(line=>[...line]);
+    const linesWidths=linesChars.map(chars=>chars.map(ch=>mctx.measureText(ch).width));
+    const linesTotalW=lines.map((line,li)=>mctx.measureText(line).width || linesWidths[li].reduce((a,b)=>a+b,0));
     const PAD=Math.ceil(fs*SCALE*0.4)+4;
-    // jeden, wielokrotnie wykorzystywany canvas (rozmiar = najszerszy znak) — unika kosztu
-    // tworzenia nowego <canvas>/kontekstu dla każdego znaku z osobna
-    const maxAdvance=Math.max(0,...chars.map((ch,i)=>/\S/.test(ch)?widths[i]:0));
+    // jeden, wielokrotnie wykorzystywany canvas (rozmiar = najszerszy znak ze wszystkich wierszy)
+    // — unika kosztu tworzenia nowego <canvas>/kontekstu dla każdego znaku z osobna
+    let maxAdvance=0;
+    linesChars.forEach((chars,li)=>chars.forEach((ch,i)=>{ if(/\S/.test(ch)) maxAdvance=Math.max(maxAdvance,linesWidths[li][i]); }));
     const gw_max=Math.max(1,Math.ceil(maxAdvance))+PAD*2;
     const cnv=document.createElement('canvas'); cnv.width=gw_max; cnv.height=gh;
     const ctx=cnv.getContext('2d');
@@ -1533,32 +1557,36 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     ctx.fillStyle='#000';
     ctx.font=fontStr;
     const allPolys=[];
-    let cum=0, any=false;
-    for(let i=0;i<chars.length;i++){
-      const ch=chars[i], w=widths[i];
-      if(!/\S/.test(ch)){ cum+=w; continue; } // spacje/odstępy: bez atramentu, tylko przesunięcie
-      const gw_c=Math.max(1,Math.ceil(w))+PAD*2;
-      ctx.clearRect(0,0,gw_max,gh);
-      ctx.save();
-      ctx.translate(PAD, gh*0.62);
-      ctx.fillText(ch,0,0);
-      ctx.restore();
-      let img; try{ img=ctx.getImageData(0,0,gw_c,gh).data; }catch(e){ cum+=w; continue; }
-      const mask=new Uint8Array(gw_c*gh);
-      let hasInk=false;
-      for(let p=0;p<gw_c*gh;p++){ const v=img[p*4+3]>128?1:0; mask[p]=v; if(v) hasInk=true; }
-      if(hasInk){
-        any=true;
-        const penOffset=cum-totalW/2;
-        traceMaskPolys(mask,gw_c,gh).forEach(poly=>{
-          const sp=simplifyRing(poly,0.5);
-          allPolys.push(sp.map(([px,py])=>[(px-PAD+penOffset)/SCALE, py/SCALE]));
-        });
+    let any=false;
+    for(let li=0;li<N;li++){
+      const chars=linesChars[li], widths=linesWidths[li], totalW=linesTotalW[li];
+      let cum=0;
+      for(let i=0;i<chars.length;i++){
+        const ch=chars[i], w=widths[i];
+        if(!/\S/.test(ch)){ cum+=w; continue; } // spacje/odstępy: bez atramentu, tylko przesunięcie
+        const gw_c=Math.max(1,Math.ceil(w))+PAD*2;
+        ctx.clearRect(0,0,gw_max,gh);
+        ctx.save();
+        ctx.translate(PAD, lineGh*0.62 + li*lineStep);
+        ctx.fillText(ch,0,0);
+        ctx.restore();
+        let img; try{ img=ctx.getImageData(0,0,gw_c,gh).data; }catch(e){ cum+=w; continue; }
+        const mask=new Uint8Array(gw_c*gh);
+        let hasInk=false;
+        for(let p=0;p<gw_c*gh;p++){ const v=img[p*4+3]>128?1:0; mask[p]=v; if(v) hasInk=true; }
+        if(hasInk){
+          any=true;
+          const penOffset=cum-totalW/2;
+          traceMaskPolys(mask,gw_c,gh).forEach(poly=>{
+            const sp=simplifyRing(poly,0.5);
+            allPolys.push(sp.map(([px,py])=>[(px-PAD+penOffset)/SCALE, py/SCALE]));
+          });
+        }
+        cum+=w;
       }
-      cum+=w;
     }
     if(!any) return null;
-    return {polys:allPolys, nb:polysBBoxMulti(allPolys), anchor:{x:0, y:gh*0.62/SCALE}};
+    return {polys:allPolys, nb:polysBBoxMulti(allPolys), anchor:{x:0, y:lineGh*0.62/SCALE}};
   }
   // Rasteryzacja zależy tylko od treści/czcionki/stylu — tsx/tsy/flip/rotation nakładane są
   // już na wynik (objBBox/textOutlinePolys), więc NIE wchodzą do klucza pamięci podręcznej.
@@ -1576,8 +1604,8 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     return cached;
   }
   // Ciasny obrys atramentu napisu przy tsx=tsy=1, jako przesunięcie {offX,offY} od punktu
-  // zakotwiczenia (o.x, o.y+fs*0.34) oraz wymiary {width,height} — to jest "naturalna" ramka,
-  // którą objBBox()/startHandle() skalują przez tsx/tsy zakotwiczone w tym samym punkcie.
+  // zakotwiczenia (o.x, textBaselineY(o)) oraz wymiary {width,height} — to jest "naturalna"
+  // ramka, którą objBBox()/startHandle() skalują przez tsx/tsy zakotwiczone w tym samym punkcie.
   function textNaturalBox(o){
     const r=getTextRaster(o); if(!r) return null;
     const {nb,anchor}=r;
@@ -1588,7 +1616,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     const r=getTextRaster(o);
     if(!r) return [];
     const {polys,anchor}=r;
-    const fs=o.fontSize||24, tsx=(o.tsx||1)*(o.flipX?-1:1), tsy=(o.tsy||1)*(o.flipY?-1:1), ax=o.x, ay=o.y+fs*0.34;
+    const tsx=(o.tsx||1)*(o.flipX?-1:1), tsy=(o.tsy||1)*(o.flipY?-1:1), ax=o.x, ay=textBaselineY(o);
     const c=objCenter(o), rot=deg2rad(o.rotation||0);
     return polys.map(poly=>poly.map(([px,py])=>{
       let dx=ax+(px-anchor.x)*tsx, dy=ay+(py-anchor.y)*tsy;
@@ -2030,9 +2058,8 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     if(o.type==='text'){
       const nb=textNaturalBox(o);
       if(nb){
-        const fs=o.fontSize||24;
         // przesunięcie ciasnej ramki atramentu względem punktu kotwiczenia (o.x / baseline) — stałe podczas całego przeciągania
-        drag.naturalBB={x:o.x+nb.offX, y:(o.y+fs*0.34)+nb.offY, width:nb.width, height:nb.height};
+        drag.naturalBB={x:o.x+nb.offX, y:textBaselineY(o)+nb.offY, width:nb.width, height:nb.height};
         drag.txOffX=nb.offX;
         drag.txOffY=nb.offY;
       }
@@ -2232,7 +2259,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       // z zakotwiczeniem przeciwnej krawędzi w miejscu (jak przy zmianie rozmiaru kształtów)
       const p=rot? rotatePt(docP.x,docP.y,c.x,c.y,-rot) : docP;
       const px=snap(p.x), py=snap(p.y);
-      const nb=d.naturalBB, fs=o.fontSize||24;
+      const nb=d.naturalBB;
       let nw=b.w, nh=b.h;
       if(h==='e') nw=Math.max(px-b.x,1);
       else if(h==='w') nw=Math.max((b.x+b.w)-px,1);
@@ -2249,7 +2276,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
         const flipSgn=o.flipY?-1:1, mag=clamp(nh/(nb.height||1),0.05,20);
         o.tsy=mag; const tsyEff=mag*flipSgn;
         const ay = (h==='s') ? (b.y-d.txOffY*tsyEff) : ((b.y+b.h)-(d.txOffY+nb.height)*tsyEff);
-        o.y = ay-fs*0.34;
+        o.y = ay-textAnchorOffset(o);
       }
       return;
     }
@@ -2468,7 +2495,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     }
     if(o.type==='line') h+=`<div class="field"><label>Kierunek</label><div class="seg" data-seg="flip"><button class="${!o.flip?'on':''}" data-flip="0">↘ ukośna</button><button class="${o.flip?'on':''}" data-flip="1">↗ ukośna</button></div></div>`;
     if(o.type==='text'){
-      h+=`<div class="field"><label>Treść napisu</label><input type="text" data-prop="text" value="${escapeXml(o.text||'')}" maxlength="80"></div>`;
+      h+=`<div class="field"><label>Treść napisu (Enter = nowa linia)</label><textarea data-prop="text" maxlength="240" rows="${Math.min(6,Math.max(2,(o.text||'').split('\n').length+1))}" style="resize:vertical;font-family:inherit">${escapeXml(o.text||'')}</textarea></div>`;
       h+=`<div class="field"><label>Czcionka (najedź na nazwę = podgląd)</label><div class="font-dd" id="propsFontDD">${fontDDMarkup(o.font)}</div></div>`;
       h+=`<div class="field"><label>Styl</label><div class="seg" data-seg="textstyle">
         <button class="${o.bold?'on':''}" data-tstyle="bold" style="font-weight:700">B</button>
@@ -2672,11 +2699,12 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     propsEl.querySelectorAll('[data-prop]').forEach(inp=>{
       const path=inp.getAttribute('data-prop');
       const isNum=inp.type==='range'||inp.type==='number';
-      const ev=inp.type==='range'?'input':'change';
+      const isLive=inp.type==='range'||inp.type==='textarea';
+      const ev=isLive?'input':'change';
       inp.addEventListener(ev, ()=>{
         let val=inp.value; if(isNum) val=Number(val);
         if(path==='name'){ o.name=val; renderLayers(); pushHistory(); return; }
-        if(path==='repeat.type'){ o.repeat=normalizeRepeat(val,o.repeat); renderProps(); renderObjects(); renderOverlay(); if(inp.type!=='range') pushHistory(); return; }
+        if(path==='repeat.type'){ o.repeat=normalizeRepeat(val,o.repeat); renderProps(); renderObjects(); renderOverlay(); scheduleLive3D(); if(inp.type!=='range') pushHistory(); return; }
         // szerokość/wysokość nie mogą spaść do zera/ujemnej - pole ma min="1",
         // ale wpisanie 0/"-5"/"" w zdarzeniu change nie jest przez przeglądarkę
         // blokowane, więc dopilnowujemy tego tutaj (inaczej np. rx mogłoby
@@ -2702,10 +2730,11 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
           const rxOut=propsEl.querySelector('[data-out="rx"]'); if(rxOut) rxOut.textContent=fmt(o.rx||0);
         }
         const out=propsEl.querySelector(`[data-out="${CSS.escape(path)}"]`); if(out) out.textContent=fmt(val);
-        renderObjects(); renderOverlay();
+        if(inp.tagName==='TEXTAREA'){ inp.style.height='auto'; inp.style.height=(inp.scrollHeight+2)+'px'; }
+        renderObjects(); renderOverlay(); scheduleLive3D();
         if(ev==='change') pushHistory();
       });
-      if(inp.type==='range'){ inp.addEventListener('change',()=>pushHistory()); }
+      if(isLive){ inp.addEventListener('change',()=>pushHistory()); }
     });
     // Przewijanie kółkiem myszy nad SKUPIONYM polem liczbowym/suwakiem zmienia
     // wartość o jeden krok (step), Shift = krok ×10 — szybkie, precyzyjne
@@ -2727,15 +2756,15 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
         o.bindings=o.bindings||{};
         if(val){ o.bindings[prop]=val; setProp(o,prop,boundVal(o,prop)); }
         else delete o.bindings[prop];
-        renderProps(); renderObjects(); renderOverlay(); pushHistory();
+        renderProps(); renderObjects(); renderOverlay(); scheduleLive3D(); pushHistory();
       });
     });
     const shapeLockRatio=propsEl.querySelector('#shapeLockRatio');
     if(shapeLockRatio) shapeLockRatio.addEventListener('change',()=>{ o.lockRatio=shapeLockRatio.checked; pushHistory(); });
     propsEl.querySelectorAll('[data-rot90]').forEach(b=>b.addEventListener('click',()=>rotate90(Number(b.getAttribute('data-rot90')))));
-    propsEl.querySelectorAll('[data-seg="mode"] button').forEach(b=>b.addEventListener('click',()=>{ o.mode=b.getAttribute('data-mode'); renderProps(); renderObjects(); pushHistory(); }));
+    propsEl.querySelectorAll('[data-seg="mode"] button').forEach(b=>b.addEventListener('click',()=>{ o.mode=b.getAttribute('data-mode'); renderProps(); renderObjects(); scheduleLive3D(); pushHistory(); }));
     propsEl.querySelectorAll('[data-seg="role"] button').forEach(b=>b.addEventListener('click',()=>{ const r=b.getAttribute('data-role'); o.role=r==='hole'?'hole':undefined; renderProps(); renderAll(); scheduleLive3D(); pushHistory(); }));
-    propsEl.querySelectorAll('[data-seg="flip"] button').forEach(b=>b.addEventListener('click',()=>{ o.flip=b.getAttribute('data-flip')==='1'; renderProps(); renderObjects(); pushHistory(); }));
+    propsEl.querySelectorAll('[data-seg="flip"] button').forEach(b=>b.addEventListener('click',()=>{ o.flip=b.getAttribute('data-flip')==='1'; renderProps(); renderObjects(); scheduleLive3D(); pushHistory(); }));
     propsEl.querySelectorAll('[data-seg="flipaxis"] button').forEach(b=>b.addEventListener('click',()=>{
       const ax=b.getAttribute('data-flipaxis');
       if(ax==='x') o.flipX=!o.flipX; else o.flipY=!o.flipY;
@@ -2766,7 +2795,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     const pathReset=propsEl.querySelector('#pathReset');
     if(pathReset) pathReset.addEventListener('click',()=>{ const ob=getSel(); if(ob&&ob.type==='path'){ ob.sx=1; ob.sy=1; renderAll(); renderProps(); pushHistory(); } });
     propsEl.querySelectorAll('[data-seg="textstyle"] button').forEach(b=>b.addEventListener('click',()=>{
-      const k=b.getAttribute('data-tstyle'); o[k]=!o[k]; renderProps(); renderObjects(); renderOverlay(); pushHistory(); updateTextToolbar();
+      const k=b.getAttribute('data-tstyle'); o[k]=!o[k]; renderProps(); renderObjects(); renderOverlay(); scheduleLive3D(); pushHistory(); updateTextToolbar();
     }));
     const textW=propsEl.querySelector('#textW'), textH=propsEl.querySelector('#textH');
     if(textW) textW.addEventListener('change',()=>{ applyTextSize(textW,textH); pushHistory(); scheduleLive3D(); });
