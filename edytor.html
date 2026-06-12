@@ -539,6 +539,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
         <div class="sc-row"><span>Usuń zaznaczone</span><span class="sc-keys"><kbd>Del</kbd></span></div>
         <div class="sc-row"><span>Zaznacz wszystko</span><span class="sc-keys"><kbd>Ctrl</kbd>+<kbd>A</kbd></span></div>
         <div class="sc-row"><span>Odwróć zaznaczenie</span><span class="sc-keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd></span></div>
+        <div class="sc-row"><span>Rozdziel na podścieżki</span><span class="sc-keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd></span></div>
         <div class="sc-row"><span>Grupuj</span><span class="sc-keys"><kbd>Ctrl</kbd>+<kbd>G</kbd></span></div>
         <div class="sc-row"><span>Rozgrupuj</span><span class="sc-keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd></span></div>
       </div>
@@ -1305,6 +1306,50 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     conv.type='path';
     const i=state.objects.findIndex(x=>x.id===o.id);
     state.objects[i]=conv; state.selectedIds=[conv.id];
+    pushHistory(); renderAll(); renderProps(); scheduleLive3D();
+  }
+
+  // Rozdziela ścieżkę z wieloma podścieżkami (np. zwektoryzowany tekst z literami
+  // i otworami) na osobne obiekty path - każdy z własną bx/by/bw/bh, dzięki czemu
+  // pojedyncze pierścienie (M/L/Z) stają się edytowalne węzłami, mają własną
+  // obwódkę itd. Pozycja x/y każdego kawałka jest skorygowana o przesunięcie
+  // środka obrotu/skalowania (z centrum całej bbox na centrum bbox kawałka), tak
+  // by wynik wizualnie pokrywał się 1:1 z oryginałem nawet przy obróconym/
+  // przeskalowanym obiekcie.
+  function breakApartPath(o){
+    if(!o || o.type!=='path' || !o.d) return;
+    const subs=(o.d.match(/[Mm][^Mm]*/g)||[]).map(s=>s.trim()).filter(Boolean);
+    if(subs.length<2) return;
+    const oldCx=(o.bx||0)+(o.bw||0)/2, oldCy=(o.by||0)+(o.bh||0)/2;
+    const rot=deg2rad(o.rotation||0), cosR=Math.cos(rot), sinR=Math.sin(rot);
+    const effSx=(o.sx||1)*(o.flipX?-1:1), effSy=(o.sy||1)*(o.flipY?-1:1);
+    // A = Rot(rot) * diag(effSx,effSy) - macierz transformacji wokół środka bbox
+    const a00=cosR*effSx, a01=-sinR*effSy, a10=sinR*effSx, a11=cosR*effSy;
+    const tmpSvg=document.createElementNS(SVG_NS,'svg');
+    tmpSvg.style.cssText='position:absolute;left:-9999px;top:-9999px;visibility:hidden;width:0;height:0';
+    document.body.appendChild(tmpSvg);
+    const tmpPath=document.createElementNS(SVG_NS,'path');
+    tmpSvg.appendChild(tmpPath);
+    const newObjs=subs.map((sd,idx)=>{
+      let d=sd; if(!/[Zz]\s*$/.test(d)) d+='Z';
+      tmpPath.setAttribute('d', d);
+      let bb; try{ bb=tmpPath.getBBox(); }catch(e){ bb={x:0,y:0,width:1,height:1}; }
+      const bx=bb.x, by=bb.y, bw=Math.max(0.01,bb.width), bh=Math.max(0.01,bb.height);
+      const newCx=bx+bw/2, newCy=by+bh/2;
+      const dx=oldCx-newCx, dy=oldCy-newCy;
+      const ax=a00*dx+a01*dy, ay=a10*dx+a11*dy;
+      const conv=JSON.parse(JSON.stringify(o));
+      conv.id=uid();
+      conv.name=(o.name||'Ścieżka')+' '+(idx+1);
+      conv.d=d; conv.bx=bx; conv.by=by; conv.bw=bw; conv.bh=bh;
+      conv.x=(o.x||0)+(dx-ax); conv.y=(o.y||0)+(dy-ay);
+      delete conv.groupId;
+      return conv;
+    });
+    document.body.removeChild(tmpSvg);
+    const i=state.objects.findIndex(x=>x.id===o.id);
+    state.objects.splice(i,1,...newObjs);
+    state.selectedIds=newObjs.map(x=>x.id);
     pushHistory(); renderAll(); renderProps(); scheduleLive3D();
   }
 
@@ -2481,6 +2526,9 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     if(o.type==='path' && (o.d.match(/M/g)||[]).length===1){
       h+=`<div class="field"><button type="button" id="smoothBtn" class="tbtn" style="width:100%;justify-content:center">〰 Wygładź w krzywe</button></div>`;
     }
+    if(o.type==='path' && (o.d.match(/M/g)||[]).length>1){
+      h+=`<div class="field"><button type="button" id="breakApartBtn" class="tbtn" style="width:100%;justify-content:center" title="Rozdziela ścieżkę z wieloma podścieżkami (np. zwektoryzowany tekst) na osobne obiekty - każdy edytowalny niezależnie">✂ Rozdziel na podścieżki <span class="ctx-key">Ctrl+Shift+B</span></button></div>`;
+    }
     // depth / 3D layer selector
     const dep = o.depth||1; const dc2=dep<=6?`d${dep}`:'dN';
     const maxDep=Math.max(1,...state.objects.map(x=>x.depth||1));
@@ -2697,6 +2745,8 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     if(offBtn) offBtn.addEventListener('click',()=>{ const d=Number(propsEl.querySelector('#offsetVal').value)||0; if(d!==0) addOffsetFromSel(d); });
     const smBtn=propsEl.querySelector('#smoothBtn');
     if(smBtn) smBtn.addEventListener('click',()=>{ const o=getSel(); if(o) smoothPathObj(o); });
+    const breakApartBtn=propsEl.querySelector('#breakApartBtn');
+    if(breakApartBtn) breakApartBtn.addEventListener('click',()=>{ const o=getSel(); if(o) breakApartPath(o); });
     const nodeEditBtn=propsEl.querySelector('#nodeEditBtn');
     if(nodeEditBtn) nodeEditBtn.addEventListener('click',()=>{ const o=getSel(); if(o) toggleNodeEdit(o); });
     const convertPathBtn=propsEl.querySelector('#convertPathBtn');
@@ -3189,6 +3239,9 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='v'){ if(!typing){ e.preventDefault(); pasteClipboard(); } return; }
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='a'){ if(!typing){ e.preventDefault(); state.selectedIds=expandGroupSelection(state.objects.filter(o=>!o.locked).map(o=>o.id)); renderOverlay(); renderLayers(); renderProps(); } return; }
     if((e.ctrlKey||e.metaKey)&&e.shiftKey&&e.key.toLowerCase()==='i'){ if(!typing){ e.preventDefault(); invertSelection(); } return; }
+    if((e.ctrlKey||e.metaKey)&&e.shiftKey&&e.key.toLowerCase()==='b'){ if(!typing){ e.preventDefault();
+      const o=getSel(); if(o) breakApartPath(o);
+    } return; }
     if((e.ctrlKey||e.metaKey)&&(e.key===']'||e.key==='[')){ if(!typing){ e.preventDefault();
       if(e.key===']') e.shiftKey?bringToFront():bringForward();
       else e.shiftKey?sendToBack():sendBackward();
