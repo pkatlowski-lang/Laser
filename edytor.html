@@ -605,29 +605,31 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     if(!window.queryLocalFonts){ alert('Ta przeglądarka nie udostępnia czcionek z komputera.\nUżyj Chrome lub Edge (i otwórz edytor przez https albo lokalnie z uprawnieniami).'); return; }
     try{
       const fonts=await window.queryLocalFonts();
-      const byFamily=new Map();
-      fonts.forEach(f=>{ if(!byFamily.has(f.family)) byFamily.set(f.family,f); });
-      const fams=[...byFamily.keys()].sort((a,b)=>a.localeCompare(b));
+      const fams=[...new Set(fonts.map(f=>f.family))].sort((a,b)=>a.localeCompare(b));
       // queryLocalFonts() daje tylko NAZWY rodzin - Canvas2D (rasteryzacja konturów do
       // wizualizacji 3D i eksportu SVG) z powodów antyfingerprintingowych odmawia
       // rysowania nimi tekstu i bezgłośnie podstawia inną czcionkę, mimo że <text> w
       // podglądzie 2D (renderowany przez CSS, nie canvas) wygląda poprawnie. Dlatego
-      // wczytujemy BINARNE dane każdej czcionki i rejestrujemy je jako prawdziwy
-      // FontFace - dzięki temu canvas używa TEJ SAMEJ czcionki co podgląd 2D.
-      let embedded=0;
-      for(const fam of fams){
+      // wczytujemy BINARNE dane KAŻDEJ odmiany (Regular/Bold/Italic/Bold Italic...) i
+      // rejestrujemy ją jako prawdziwy FontFace z odpowiednim weight/style - dzięki
+      // temu canvas używa tych SAMYCH glifów co podgląd 2D, również dla pogrubienia/kursywy.
+      const embeddedFamilies=new Set();
+      for(const fd of fonts){
         try{
-          const blob=await byFamily.get(fam).blob();
-          const ff=new FontFace(fam, await blob.arrayBuffer());
+          const blob=await fd.blob();
+          const s=(fd.style||'').toLowerCase();
+          const weight=/bold/.test(s)?'bold':'normal';
+          const style=/italic|oblique/.test(s)?'italic':'normal';
+          const ff=new FontFace(fd.family, await blob.arrayBuffer(), {weight, style});
           await ff.load();
           document.fonts.add(ff);
-          embedded++;
+          embeddedFamilies.add(fd.family);
         }catch(e){}
       }
       localFonts=fams.map(f=>[`"${f}"`, f]);
       _textOutlineCache.clear();
       renderProps(); renderAll();
-      const note=embedded<fams.length?` (zarejestrowano do wektoryzacji ${embedded}/${fams.length})`:'';
+      const note=embeddedFamilies.size<fams.length?` (zarejestrowano do wektoryzacji ${embeddedFamilies.size}/${fams.length})`:'';
       alert('Wczytano '+fams.length+' czcionek z komputera'+note+'. Znajdziesz je na liście „Czcionka” (oznaczone • PC).');
     }catch(e){ alert('Nie udało się wczytać czcionek z komputera: '+e.message); }
   }
