@@ -1022,22 +1022,26 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     }
     const o=sel[0];
     const b=objBBox(o), c={x:b.x+b.w/2,y:b.y+b.h/2};
-    const hs=[ ['nw',b.x,b.y],['n',b.x+b.w/2,b.y],['ne',b.x+b.w,b.y],
-               ['e',b.x+b.w,b.y+b.h/2],['se',b.x+b.w,b.y+b.h],['s',b.x+b.w/2,b.y+b.h],
-               ['sw',b.x,b.y+b.h],['w',b.x,b.y+b.h/2] ];
-    const hr=state.view.w*0.005;     // visible handle dot radius (~constant on screen)
-    const hit=hr*3;                  // invisible hit area — wider than the dot, so handles are easy to grab
-    const rotR=state.view.w*0.011, rotHit=rotR*2.4; // rotation handle stays larger/easier to grab
     let s=`<g transform="rotate(${fmt(o.rotation||0)} ${fmt(c.x)} ${fmt(c.y)})">`;
     s+=`<rect class="sel-box" x="${fmt(Math.min(b.x,b.x+b.w))}" y="${fmt(Math.min(b.y,b.y+b.h))}" width="${fmt(Math.abs(b.w))}" height="${fmt(Math.abs(b.h))}"/>`;
-    const rotY=b.y-rotR*4;
-    s+=`<line class="sel-rot-line" x1="${fmt(c.x)}" y1="${fmt(b.y)}" x2="${fmt(c.x)}" y2="${fmt(rotY)}"/>`;
-    s+=`<circle class="sel-rot" cx="${fmt(c.x)}" cy="${fmt(rotY)}" r="${fmt(rotR*1.25)}" style="pointer-events:none"/>`;
-    s+=`<circle cx="${fmt(c.x)}" cy="${fmt(rotY)}" r="${fmt(rotHit)}" fill="transparent" data-handle="rot"/>`;
-    hs.forEach(([k,hx,hy])=>{
-      s+=`<circle class="sel-handle" cx="${fmt(hx)}" cy="${fmt(hy)}" r="${fmt(hr)}" style="pointer-events:none"/>`;
-      s+=`<circle cx="${fmt(hx)}" cy="${fmt(hy)}" r="${fmt(hit)}" fill="transparent" data-handle="${k}"/>`;
-    });
+    // zablokowany obiekt: pokazujemy tylko ramkę zaznaczenia (informacyjnie) -
+    // bez uchwytów do zmiany rozmiaru/obrotu, bo przeciąganie ich i tak nic nie robi (startHandle/startMove sprawdzają o.locked)
+    if(!o.locked){
+      const hs=[ ['nw',b.x,b.y],['n',b.x+b.w/2,b.y],['ne',b.x+b.w,b.y],
+                 ['e',b.x+b.w,b.y+b.h/2],['se',b.x+b.w,b.y+b.h],['s',b.x+b.w/2,b.y+b.h],
+                 ['sw',b.x,b.y+b.h],['w',b.x,b.y+b.h/2] ];
+      const hr=state.view.w*0.005;     // visible handle dot radius (~constant on screen)
+      const hit=hr*3;                  // invisible hit area — wider than the dot, so handles are easy to grab
+      const rotR=state.view.w*0.011, rotHit=rotR*2.4; // rotation handle stays larger/easier to grab
+      const rotY=b.y-rotR*4;
+      s+=`<line class="sel-rot-line" x1="${fmt(c.x)}" y1="${fmt(b.y)}" x2="${fmt(c.x)}" y2="${fmt(rotY)}"/>`;
+      s+=`<circle class="sel-rot" cx="${fmt(c.x)}" cy="${fmt(rotY)}" r="${fmt(rotR*1.25)}" style="pointer-events:none"/>`;
+      s+=`<circle cx="${fmt(c.x)}" cy="${fmt(rotY)}" r="${fmt(rotHit)}" fill="transparent" data-handle="rot"/>`;
+      hs.forEach(([k,hx,hy])=>{
+        s+=`<circle class="sel-handle" cx="${fmt(hx)}" cy="${fmt(hy)}" r="${fmt(hr)}" style="pointer-events:none"/>`;
+        s+=`<circle cx="${fmt(hx)}" cy="${fmt(hy)}" r="${fmt(hit)}" fill="transparent" data-handle="${k}"/>`;
+      });
+    }
     s+=`</g>`+guideLinesMarkup()+dragLabelMarkup();
     gOverlay.innerHTML=s;
   }
