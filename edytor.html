@@ -238,6 +238,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 .sum-time-row{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
 .sum-time-row.total{color:var(--text);font-weight:700;font-size:.88rem;margin-top:4px;padding-top:6px;border-top:1px solid var(--border)}
 
+/* ---- Wycena projektu (modal) ---- */
+.quote-price{margin-top:14px;padding:20px 12px;text-align:center;font-size:1.9rem;font-weight:800;color:var(--accent);background:var(--surface2);border:1px solid var(--border);border-radius:10px;letter-spacing:.5px}
+.quote-price.quote-empty{font-size:.86rem;font-weight:500;color:var(--muted)}
+
 /* ---- Skróty klawiszowe (modal) ---- */
 .shortcuts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px 28px;margin-top:16px}
 .sc-group h4{margin:0 0 8px;font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--accent)}
@@ -365,6 +369,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     </div>
     <div class="tgroup">
       <button class="tbtn" id="summaryBtn" title="Podsumowanie projektu — szacowana długość cięcia/nacinania, powierzchnia grawerowania i czas pracy lasera">📊 Podsumowanie</button>
+      <button class="tbtn" id="quoteBtn" title="Wycena projektu — wybierz materiał i zobacz cenę końcową">💰 Wycena</button>
       <button class="tbtn" id="helpBtn" title="Skróty klawiszowe (?)">⌨ Skróty</button>
     </div>
   </div>
@@ -654,6 +659,16 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   </div>
 </div>
 
+<div class="modal-ov" id="modalQuote">
+  <div class="modal-box" style="max-width:400px">
+    <button class="modal-close" id="modalQuoteClose" title="Zamknij">✕</button>
+    <h3>💰 Wycena projektu</h3>
+    <div class="field"><label>Materiał</label><select id="quoteMat"></select></div>
+    <div class="quote-price" id="quotePrice">–</div>
+    <p style="font-size:.74rem;color:var(--muted);margin:10px 0 0;line-height:1.5">Cena końcowa za wykonanie projektu z wybranego materiału — obejmuje materiał, pracę lasera i pakowanie.</p>
+  </div>
+</div>
+
 <script>
 (function(){
   const SVG_NS='http://www.w3.org/2000/svg';
@@ -781,18 +796,9 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   const MATERIAL_PRESETS=[
     {label:'Sklejka 3 mm', mm:3},
     {label:'Sklejka 4 mm', mm:4},
+    {label:'Sklejka 5 mm', mm:5},
     {label:'Sklejka 6 mm', mm:6},
-    {label:'Sklejka 9 mm', mm:9},
-    {label:'Sklejka 12 mm', mm:12},
-    {label:'MDF 3 mm', mm:3},
-    {label:'MDF 6 mm', mm:6},
-    {label:'Pleksi (akryl) 3 mm', mm:3},
-    {label:'Pleksi (akryl) 5 mm', mm:5},
-    {label:'Pleksi (akryl) 8 mm', mm:8},
-    {label:'Tektura 2 mm', mm:2},
-    {label:'Tektura 3 mm', mm:3},
-    {label:'Filc 3 mm', mm:3},
-    {label:'Forex (PVC) 3 mm', mm:3}
+    {label:'HDF 3 mm', mm:3}
   ];
   function loadCustomMaterials(){
     try{ return JSON.parse(localStorage.getItem('laser_edytor_materials_v1')||'[]'); }catch(e){ return []; }
@@ -949,8 +955,11 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   function objMarkup(o, forExport){
     const inner=innerGeometry(o, forExport);
     const copies=repeatTransforms(o).map(t=> t? `<g transform="${t}">${inner}</g>` : inner).join('');
-    const attrs= forExport?'' : ` data-id="${o.id}" style="cursor:${o.locked?'not-allowed':'move'}"`;
-    return `<g${attrs}>${copies}</g>`;
+    if(forExport) return `<g>${copies}</g>`;
+    // Przezroczystość to tylko wskazówka wizualna w edytorze (np. do podglądu
+    // nakładających się elementów) - eksport SVG do lasera jest zawsze pełną krycia.
+    const op=(o.type!=='image' && o.opacity!=null && o.opacity<100)?`opacity:${fmt(Math.max(0,Math.min(100,o.opacity))/100)};`:'';
+    return `<g data-id="${o.id}" style="cursor:${o.locked?'not-allowed':'move'};${op}">${copies}</g>`;
   }
 
   /* ---------------- Canvas rendering ---------------- */
@@ -2623,6 +2632,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       <button type="button" data-rot90="-1" title="Obróć o 90° w lewo">↺ Obróć 90°</button>
       <button type="button" data-rot90="1" title="Obróć o 90° w prawo">↻ Obróć 90°</button>
     </div></div>`;
+    h+=rangeField('Przezroczystość w edytorze (%)','opacity',o.opacity??100,0,100,1,o);
     if(o.type==='path'||o.type==='text'){
       h+=`<div class="field"><label>Odbicie lustrzane</label><div class="seg" data-seg="flipaxis">
         <button class="${o.flipX?'on':''}" data-flipaxis="x">↔ Poziomo</button>
@@ -3633,7 +3643,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     }).join('');
 
     note.innerHTML=`<strong>Wskazówka do produkcji:</strong><br>
-    • Wytnij każdą warstwę z osobnego arkusza materiału (sklejka, MDF itp.).<br>
+    • Wytnij każdą warstwę z osobnego arkusza materiału (sklejka, HDF itp.).<br>
     • Warstwa 1 to podstawa — może być grubsza (np. 6 mm). Kolejne warstwy dają głębię (np. 3 mm każda).<br>
     • Sklejaj warstwy od dołu do góry: 1 → 2 → 3 … Uzyskasz efekt 3D w zależności od liczby warstw.<br>
     • Łączna głębokość = suma grubości wszystkich warstw materiału.`;
@@ -3713,6 +3723,65 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   document.getElementById('modalSummaryClose').addEventListener('click',()=>modalSummary.classList.remove('open'));
   modalSummary.addEventListener('click',e=>{ if(e.target===modalSummary) modalSummary.classList.remove('open'); });
   [sumCutSpeed,sumScoreSpeed,sumEngraveSpeed,sumEngraveSpacing].forEach(inp=>inp.addEventListener('input',renderSummary));
+
+  /* ---------------- Wycena projektu ---------------- */
+  // Stałe parametry wyceny — celowo NIE są pokazywane w interfejsie ani edytowalne;
+  // klient/użytkownik widzi wyłącznie cenę końcową. Prędkość cięcia (mm/min) i cena
+  // materiału (zł/cm²) przypisane na stałe do każdej pozycji materiałowej.
+  const QUOTE_MATERIALS={
+    'sklejka-3':{label:'Sklejka 3 mm', speed:820, pricePerCm2:0.0038},
+    'sklejka-4':{label:'Sklejka 4 mm', speed:650, pricePerCm2:0.0051},
+    'sklejka-5':{label:'Sklejka 5 mm', speed:500, pricePerCm2:0.0064},
+    'sklejka-6':{label:'Sklejka 6 mm', speed:350, pricePerCm2:0.0077},
+    'hdf-3':{label:'HDF 3 mm', speed:750, pricePerCm2:0.0038}
+  };
+  const QUOTE_LASER_PER_MIN=1.5;  // koszt minuty pracy lasera (zł)
+  const QUOTE_PACKAGING=2.5;      // pakowanie (zł)
+  const QUOTE_MARGIN=0.30;        // marża (30%)
+  // Łączna długość trasy lasera po projekcie (mm) — kontury WSZYSTKICH widocznych
+  // elementów (cięcie, nacięcie i grawer liniowy) z powieleniami; obrazy pomocnicze pomijane.
+  function quotePathLen(){
+    let len=0;
+    state.objects.forEach(o=>{
+      if(o.visible===false || o.type==='image') return;
+      if(o.type==='line'){ len+=Math.hypot(o.w,o.h)*repeatTransforms(o).length; return; }
+      objSubPolysRepeated(o).forEach(p=>{ len+=polyPerimeter(p); });
+    });
+    return len;
+  }
+  // Pole zużytego materiału (cm²) — każdy element liczony jako prostokąt
+  // wzdłuż × wszerz (obrys osiowy), każda kopia powielenia osobno, wszystko sumowane.
+  function quoteMaterialArea(){
+    let mm2=0;
+    state.objects.forEach(o=>{
+      if(o.visible===false || o.type==='image') return;
+      const bb=rotatedBBox(o);
+      mm2+=Math.abs((bb.maxx-bb.minx)*(bb.maxy-bb.miny))*repeatTransforms(o).length;
+    });
+    return mm2/100;
+  }
+  function computeQuote(matKey){
+    const mat=QUOTE_MATERIALS[matKey]; if(!mat) return null;
+    const timeMin=quotePathLen()/mat.speed;
+    const laserCost=timeMin*QUOTE_LASER_PER_MIN;
+    const materialCost=quoteMaterialArea()*mat.pricePerCm2;
+    const total=(laserCost+materialCost+QUOTE_PACKAGING)*(1+QUOTE_MARGIN);
+    return Math.round(total*100)/100;
+  }
+  const modalQuote=document.getElementById('modalQuote');
+  const quoteMatSel=document.getElementById('quoteMat');
+  quoteMatSel.innerHTML=Object.entries(QUOTE_MATERIALS).map(([k,m])=>`<option value="${k}">${m.label}</option>`).join('');
+  function renderQuote(){
+    const priceEl=document.getElementById('quotePrice');
+    const hasWork=state.objects.some(o=>o.visible!==false && o.type!=='image');
+    if(!hasWork){ priceEl.textContent='Brak elementów do wyceny — narysuj projekt na płycie.'; priceEl.classList.add('quote-empty'); return; }
+    priceEl.classList.remove('quote-empty');
+    priceEl.textContent=computeQuote(quoteMatSel.value).toFixed(2).replace('.',',')+' zł';
+  }
+  document.getElementById('quoteBtn').addEventListener('click',()=>{ renderQuote(); modalQuote.classList.add('open'); });
+  document.getElementById('modalQuoteClose').addEventListener('click',()=>modalQuote.classList.remove('open'));
+  modalQuote.addEventListener('click',e=>{ if(e.target===modalQuote) modalQuote.classList.remove('open'); });
+  quoteMatSel.addEventListener('change',renderQuote);
 
   /* ---------------- Manager warstw 3D ---------------- */
   function renderDepthLegend(){
@@ -5129,7 +5198,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   document.fonts.ready.then(()=>{ _textOutlineCache.clear(); renderAll(); });
 
   // Hak debugowy do testów (Playwright) — bez wpływu na działanie edytora
-  window.__lzr={state, buildSeparatedSVG, buildLayerScene, mergeLayerRings, unionAll, objSubPolys, objSubPolysLocal, objSubPolysRepeated, textOutlinePolys, objBBox, rotatedBBox, selBBox, polyArea, polyPerimeter, objInkArea, computeProjectStats, polysBBoxMulti, polyToPathD, polyToSmoothPathD, renderAll, updateLive3D, renderProps, select, defaultsFor, zoomFit, repeatTransforms, exportSVG, buildGearPoints, simplifyRing, rasterizeTextOutlines, textNaturalBox, getTextRaster};
+  window.__lzr={state, buildSeparatedSVG, buildLayerScene, mergeLayerRings, unionAll, objSubPolys, objSubPolysLocal, objSubPolysRepeated, textOutlinePolys, objBBox, rotatedBBox, selBBox, polyArea, polyPerimeter, objInkArea, computeProjectStats, computeQuote, quotePathLen, quoteMaterialArea, polysBBoxMulti, polyToPathD, polyToSmoothPathD, renderAll, updateLive3D, renderProps, select, defaultsFor, zoomFit, repeatTransforms, exportSVG, buildGearPoints, simplifyRing, rasterizeTextOutlines, textNaturalBox, getTextRaster};
 })();
 </script>
 </body>
