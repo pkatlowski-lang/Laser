@@ -1,0 +1,55 @@
+{
+  "name": "edytor-laser",
+  "version": "1.0.0",
+  "description": "Edytor projektów do wycinania i grawerowania laserem — wersja desktopowa",
+  "main": "main.js",
+  "author": "LaserArt Pracownia",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "prestart": "node copy-app.js",
+    "start": "electron .",
+    "predist": "node copy-app.js",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac",
+    "dist:linux": "electron-builder --linux"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "pl.laserart.edytor",
+    "productName": "Edytor Laser",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "app/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": ["nsis"],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "mac": {
+      "target": ["dmg"],
+      "icon": "build/icon.png",
+      "category": "public.app-category.graphics-design"
+    },
+    "linux": {
+      "target": ["AppImage"],
+      "icon": "build/icon.png",
+      "category": "Graphics"
+    }
+  }
+}
