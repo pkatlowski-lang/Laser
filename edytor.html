@@ -588,6 +588,9 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
 <script>
 (function(){
   const SVG_NS='http://www.w3.org/2000/svg';
+  // Wizualizacja 3D: zakładka (overlap) ścianek bocznych w px scalonego widoku 3D - eliminuje
+  // ułamkowe prześwity tła na stykach sąsiednich ścianek/płyt (patrz buildLayerScene)
+  const WALL_OVERLAP=0.75;
   const COLORS={cut:'#ff2d2d',engrave:'#1c1c1c',score:'#2f7bd8',hole:'#9b5de5'};
   const FONTS=[
     ['"Playfair Display", serif','Playfair Display'],
@@ -3363,7 +3366,15 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
           const dx=bx-ax, dy=by-ay, len=Math.hypot(dx,dy);
           if(len<0.05) continue;
           const ang=Math.atan2(dy,dx)*180/Math.PI;
-          walls+=`<div class="l3d-wall" style="width:${fmt(len)}px;height:${fmt(thick)}px;background:${wallCol};transform:translate3d(${fmt(ax)}px,${fmt(ay)}px,${fmt(zBase)}px) rotateZ(${fmt(ang)}deg) rotateX(90deg)"></div>`;
+          // Sąsiednie ścianki boczne stykają się tylko jedną krawędzią/wierzchołkiem - przy
+          // renderowaniu obróconych w 3D płaszczyzn przeglądarka potrafi zostawić tam
+          // ułamkowy prześwit tła (widoczna "rysa" na krawędziach bryły). Wydłużamy każdą
+          // ściankę o WALL_OVERLAP w obu kierunkach (wzdłuż krawędzi i w osi Z), żeby
+          // sąsiadujące ścianki/płyty się delikatnie nakładały, a nie tylko stykały.
+          const ux=dx/len, uy=dy/len;
+          const sx=ax-ux*WALL_OVERLAP, sy=ay-uy*WALL_OVERLAP;
+          const wlen=len+WALL_OVERLAP*2, wthick=thick+WALL_OVERLAP*2;
+          walls+=`<div class="l3d-wall" style="width:${fmt(wlen)}px;height:${fmt(wthick)}px;background:${wallCol};transform:translate3d(${fmt(sx)}px,${fmt(sy)}px,${fmt(zBase-WALL_OVERLAP)}px) rotateZ(${fmt(ang)}deg) rotateX(90deg)"></div>`;
         }
       });
       // ---- góra płyty: jeden scalony kształt (bez szwów) + ewentualne elementy nie-geometryczne (tekst) ----
