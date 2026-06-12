@@ -325,7 +325,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       <input type="file" id="loadProjectInput" accept=".json,application/json" style="display:none">
       <button class="tbtn" id="importImageBtn" title="Importuj obraz (PNG/JPG) jako warstwę pomocniczą do przerysowania — nie jest cięty ani eksportowany">🖼 Importuj obraz</button>
       <input type="file" id="importImageInput" accept="image/*" style="display:none">
-      <button class="tbtn" id="importSvgBtn" title="Importuj plik SVG jako edytowalne obiekty — kolory cięcia/grawerowania/nacięcia rozpoznawane automatycznie (czerwony=cięcie, niebieski=nacięcie, czarny=grawer)">📐 Importuj SVG</button>
+      <button class="tbtn" id="importSvgBtn" title="Importuj plik SVG jako edytowalne obiekty — kolory cięcia/grawerowania/nacięcia rozpoznawane automatycznie (czerwony=cięcie, niebieski=nacięcie, czarny=grawer); napisy <text> importowane jako edytowalny tekst (lub kontury liter, jeśli mają obrót/skos)">📐 Importuj SVG</button>
       <input type="file" id="importSvgInput" accept=".svg,image/svg+xml" style="display:none">
     </div>
     <div class="tgroup">
@@ -4521,6 +4521,59 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     if(isDark(stroke)) return 'engrave';
     return 'cut';
   }
+  // Mapuje font-family z importowanego SVG na jedną z czcionek dostępnych w edytorze
+  // (heurystyka po nazwie/rodzaju - dokładna czcionka z pliku SVG nie musi być zainstalowana).
+  function svgFontToAppFont(fam){
+    const f=(fam||'').toLowerCase();
+    if(/dancing|brush|signat/.test(f)) return FONTS[1][0];
+    if(/vibes|calligraph/.test(f)) return FONTS[2][0];
+    if(/montserrat/.test(f)) return FONTS[3][0];
+    if(/sans-serif|^sans|arial|helvetica|verdana|tahoma|inter|roboto/.test(f)) return FONTS[4][0];
+    if(/serif|georgia|times|garamond|playfair/.test(f)) return FONTS[0][0];
+    return FONTS[4][0];
+  }
+  // Zwraca treść elementu <text> jako tablicę wierszy: każdy <tspan>-dziecko = jeden wiersz
+  // (typowy układ wielowierszowego tekstu z Illustratora/Inkscape), albo cała treść jako 1 wiersz.
+  function svgTextLines(el){
+    const tspans=[...el.children].filter(c=>c.tagName && c.tagName.toLowerCase().replace(/^.*:/,'')==='tspan');
+    const raw=tspans.length ? tspans.map(t=>t.textContent) : [el.textContent];
+    return raw.map(t=>(t||'').replace(/\s+/g,' ').trim()).filter(Boolean);
+  }
+  // Przygotowuje element <text> do importu: rasteryzuje go (te same kontury, co
+  // "Dramat"/convertTextToPath), wyznacza punkt zakotwiczenia w lokalnym układzie SVG
+  // (uwzględniając text-anchor) i zwraca dane potrzebne do osadzenia jako obiekt 'text'
+  // (transformacja bez obrotu/skosu) lub jako 'path' z konturami liter (ogólna transformacja).
+  function svgTextItemFromEl(el, mat){
+    const lines=svgTextLines(el);
+    if(!lines.length) return null;
+    const content=lines.join('\n');
+    const fs0=parseFloat(svgInheritedStyle(el,'font-size','16'))||16;
+    if(fs0<=0) return null;
+    const appFont=svgFontToAppFont(svgInheritedStyle(el,'font-family',''));
+    const bold=/bold|^[6-9]00$/i.test(svgInheritedStyle(el,'font-weight','normal'));
+    const italic=/italic|oblique/i.test(svgInheritedStyle(el,'font-style','normal'));
+    const anchorAttr=svgInheritedStyle(el,'text-anchor','start');
+    const svgX=parseFloat(el.getAttribute('x'))||0;
+    const svgY=parseFloat(el.getAttribute('y'))||0;
+    const mode=svgColorsToMode(svgInheritedStyle(el,'fill','black'), svgInheritedStyle(el,'stroke','none'));
+
+    const raster=rasterizeTextOutlines({text:content, font:appFont, fontSize:fs0, bold, italic});
+    if(!raster) return null;
+    const {polys, nb, anchor}=raster;
+
+    let ax;
+    if(anchorAttr==='middle') ax=svgX;
+    else if(anchorAttr==='end') ax=svgX-nb.maxx;
+    else ax=svgX-nb.minx;
+    const oyLocal=svgY-fs0*(0.94-0.6*lines.length);
+
+    const localD=polys.map(poly=>{
+      const sp=smoothRingToPolyline(poly,50).map(([px,py])=>[ax+px, svgY+(py-anchor.y)]);
+      return polyToPathD(sp);
+    }).join(' ');
+
+    return {kind:'text', localD, mat, mode, content, appFont, fs0, bold, italic, ax, oyLocal};
+  }
 
   /* Import an SVG file: extract shapes, measure bbox, save as custom base. */
   function importSvgFile(file){
@@ -4588,11 +4641,16 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
           const tag=child.tagName.toLowerCase().replace(/^.*:/,'');
           if(SKIP.has(tag)) continue;
           const cumMat=matMultiply(mat, parseTransformAttr(child.getAttribute('transform')));
+          if(tag==='text'){
+            const it=svgTextItemFromEl(child, cumMat);
+            if(it) items.push(it);
+            continue; // <tspan>-y są już obsłużone wewnątrz svgTextItemFromEl
+          }
           if(SHAPE_TAGS.has(tag)){
             const localD=svgShapeElToD(child);
             if(localD){
               items.push({
-                localD, mat:cumMat,
+                kind:'shape', localD, mat:cumMat,
                 mode: svgColorsToMode(svgInheritedStyle(child,'fill','black'), svgInheritedStyle(child,'stroke','none')),
                 fillRule: svgInheritedStyle(child,'fill-rule','nonzero')==='evenodd'?'evenodd':'nonzero'
               });
@@ -4638,6 +4696,30 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
 
       const newObjs=prepared.map(it=>{
         const matFinal=matMultiply(matGlobal, it.mat);
+        if(it.kind==='text'){
+          // Bez obrotu/skosu: osadzamy jako EDYTOWALNY napis (czcionka/rozmiar/treść da
+          // się dalej zmieniać). Z obrotem/skosem: zachowujemy wektoryzowane kontury liter
+          // jako ścieżkę (jak "Dramat") - jedyny sposób, by transformacja była 1:1.
+          if(isUniformScaleMat(matFinal)){
+            const scale=matFinal[0];
+            const [axF,oyF]=matApply(matFinal, it.ax, it.oyLocal);
+            return {
+              id:uid(), type:'text', name:'', w:40, h:40, rotation:0,
+              x:axF, y:oyF, font:it.appFont, fontSize:it.fs0*scale, text:it.content,
+              bold:it.bold, italic:it.italic, tsx:1, tsy:1,
+              mode:it.mode, visible:true, locked:false, depth:1, repeat:{type:'none'}
+            };
+          }
+          const dT=transformPathDGeneral(it.localD, matFinal);
+          const bT=bboxOf(dT);
+          return {
+            id:uid(), type:'path', name:'',
+            d:dT, fillRule:'evenodd',
+            bx:bT.x, by:bT.y, bw:Math.max(0.01,bT.width), bh:Math.max(0.01,bT.height),
+            x:0, y:0, rotation:0, sx:1, sy:1,
+            mode:it.mode, visible:true, locked:false, depth:1, repeat:{type:'none'}
+          };
+        }
         let d, ox, oy;
         if(isUniformScaleMat(matFinal)){
           d=scalePathD(it.localD, matFinal[0]);
