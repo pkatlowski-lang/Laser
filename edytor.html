@@ -226,6 +226,18 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 .mat-row .mat-del:hover{color:#e76f51}
 .mat-empty{font-size:.74rem;color:var(--muted);line-height:1.5}
 
+/* ---- Dwie kolumny pól (np. w modalu podsumowania) ---- */
+.fields2{display:flex;gap:8px}
+.fields2 .field{flex:1;min-width:0}
+
+/* ---- Podsumowanie projektu (modal) ---- */
+.sum-stats{display:flex;flex-direction:column;gap:6px}
+.sum-row{display:flex;justify-content:space-between;align-items:center;padding:7px 10px;border:1px solid var(--border);border-radius:7px;background:var(--surface2);font-size:.82rem}
+.sum-row .sum-val{color:var(--accent);font-weight:600}
+.sum-time{display:flex;flex-direction:column;gap:4px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
+.sum-time-row{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+.sum-time-row.total{color:var(--text);font-weight:700;font-size:.88rem;margin-top:4px;padding-top:6px;border-top:1px solid var(--border)}
+
 /* ---- Skróty klawiszowe (modal) ---- */
 .shortcuts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px 28px;margin-top:16px}
 .sc-group h4{margin:0 0 8px;font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--accent)}
@@ -352,6 +364,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       <button class="tbtn" id="export3dBtn" title="Eksport 3D — pobierz osobne SVG dla każdej warstwy głębokości i sklejaj je, by uzyskać efekt 3D">🧊 Eksport 3D</button>
     </div>
     <div class="tgroup">
+      <button class="tbtn" id="summaryBtn" title="Podsumowanie projektu — szacowana długość cięcia/nacinania, powierzchnia grawerowania i czas pracy lasera">📊 Podsumowanie</button>
       <button class="tbtn" id="helpBtn" title="Skróty klawiszowe (?)">⌨ Skróty</button>
     </div>
   </div>
@@ -619,6 +632,25 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     </div>
     <button type="button" class="tbtn" id="matAddBtn" style="width:100%;justify-content:center;margin-top:4px">+ Dodaj materiał</button>
     <div class="mat-list" id="matList"></div>
+  </div>
+</div>
+
+<div class="modal-ov" id="modalSummary">
+  <div class="modal-box" style="max-width:480px">
+    <button class="modal-close" id="modalSummaryClose" title="Zamknij">✕</button>
+    <h3>📊 Podsumowanie projektu</h3>
+    <div class="sum-stats" id="summaryStats"></div>
+    <h4 style="margin:14px 0 8px;font-size:.8rem;color:var(--muted)">Szacowany czas pracy lasera</h4>
+    <div class="fields2">
+      <div class="field"><label>Prędkość cięcia (mm/min)</label><input type="number" id="sumCutSpeed" min="1" step="10"></div>
+      <div class="field"><label>Prędkość nacinania (mm/min)</label><input type="number" id="sumScoreSpeed" min="1" step="10"></div>
+    </div>
+    <div class="fields2">
+      <div class="field"><label>Prędkość grawerowania (mm/min)</label><input type="number" id="sumEngraveSpeed" min="1" step="10"></div>
+      <div class="field"><label>Odstęp linii graweru (mm)</label><input type="number" id="sumEngraveSpacing" min="0.01" step="0.01"></div>
+    </div>
+    <div class="sum-time" id="summaryTime"></div>
+    <p style="font-size:.74rem;color:var(--muted);margin:10px 0 0;line-height:1.5">Szacunek orientacyjny — nie uwzględnia czasu przejazdów między elementami, przyspieszeń ani liczby przejść.</p>
   </div>
 </div>
 
@@ -1785,6 +1817,22 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     for(let i=0,j=poly.length-1;i<poly.length;j=i++){ const xi=poly[i][0],yi=poly[i][1],xj=poly[j][0],yj=poly[j][1];
       if(((yi>y)!==(yj>y)) && (x<(xj-xi)*(y-yi)/(yj-yi)+xi)) inside=!inside; } return inside; }
   function polyArea(poly){ let a=0; for(let i=0,j=poly.length-1;i<poly.length;j=i++){ a+=(poly[j][0]+poly[i][0])*(poly[j][1]-poly[i][1]); } return a/2; }
+  function polyPerimeter(poly){ let len=0; for(let i=0,j=poly.length-1;i<poly.length;j=i++){ len+=Math.hypot(poly[i][0]-poly[j][0],poly[i][1]-poly[j][1]); } return len; }
+  // Powierzchnia "tuszu" obiektu (np. liter z dziurami w "o"/"e"/"8") — sumuje pola
+  // konturów zewnętrznych i ODEJMUJE pola konturów-otworów (rozpoznanych tak jak
+  // w mergeLayerRings/buildLayerScene: kontur jest otworem, gdy jego środek leży
+  // wewnątrz innego, większego konturu tego samego obiektu).
+  function objInkArea(o){
+    const polys=objSubPolysRepeated(o);
+    if(!polys.length) return 0;
+    const meta=polys.map(p=>({pts:p, area:Math.abs(polyArea(p)), c:polyCentroid(p)}));
+    let total=0;
+    meta.forEach(m=>{
+      const isHole=meta.some(o2=>o2!==m && o2.area>m.area && pointInPoly(m.c,o2.pts));
+      total += isHole ? -m.area : m.area;
+    });
+    return Math.max(0,total);
+  }
   // Greiner–Hormann clipping (zwalidowane na znanych polach: kwadraty, okręgi, gwiazda)
   function clipGH(subject, clip, kind){
     function build(arr){ const vs=arr.map(p=>({x:p[0],y:p[1],alpha:0,inter:false,neighbour:null,entry:false,visited:false,next:null,prev:null}));
@@ -3605,6 +3653,67 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   document.getElementById('modalHelpClose').addEventListener('click', hideHelp);
   modalHelp.addEventListener('click', e=>{ if(e.target===modalHelp) hideHelp(); });
 
+  /* ---------------- Podsumowanie projektu ---------------- */
+  // Sumuje długości tras cięcia/nacinania oraz powierzchnię grawerowania dla
+  // wszystkich widocznych elementów (z uwzględnieniem powieleń) - obiekty
+  // referencyjne (importowane obrazy) są pomijane, bo nie są wysyłane do lasera.
+  function computeProjectStats(){
+    let cutLen=0, scoreLen=0, engraveArea=0, cutCount=0, scoreCount=0, engraveCount=0;
+    state.objects.forEach(o=>{
+      if(o.visible===false || o.mode==='reference') return;
+      const reps=repeatTransforms(o).length;
+      if(o.type==='line'){
+        const len=Math.hypot(o.w,o.h)*reps;
+        if(o.mode==='score'){ scoreLen+=len; scoreCount++; } else { cutLen+=len; cutCount++; }
+        return;
+      }
+      if(o.mode==='engrave'){
+        engraveArea+=objInkArea(o); engraveCount++;
+      } else {
+        const polys=objSubPolysRepeated(o);
+        const len=polys.reduce((a,p)=>a+polyPerimeter(p),0);
+        if(o.mode==='score'){ scoreLen+=len; scoreCount++; } else { cutLen+=len; cutCount++; }
+      }
+    });
+    return {cutLen, scoreLen, engraveArea, cutCount, scoreCount, engraveCount};
+  }
+  function formatTime(min){
+    if(!Number.isFinite(min) || min<0) return '–';
+    const totalSec=Math.round(min*60);
+    const h=Math.floor(totalSec/3600), m=Math.floor((totalSec%3600)/60), s=totalSec%60;
+    if(h>0) return `${h} godz. ${m} min`;
+    if(m>0) return `${m} min ${s} s`;
+    return `${s} s`;
+  }
+  const modalSummary=document.getElementById('modalSummary');
+  const sumCutSpeed=document.getElementById('sumCutSpeed'), sumScoreSpeed=document.getElementById('sumScoreSpeed');
+  const sumEngraveSpeed=document.getElementById('sumEngraveSpeed'), sumEngraveSpacing=document.getElementById('sumEngraveSpacing');
+  if(!sumCutSpeed.value) sumCutSpeed.value=600;
+  if(!sumScoreSpeed.value) sumScoreSpeed.value=1500;
+  if(!sumEngraveSpeed.value) sumEngraveSpeed.value=6000;
+  if(!sumEngraveSpacing.value) sumEngraveSpacing.value=0.1;
+  function renderSummary(){
+    const s=computeProjectStats();
+    document.getElementById('summaryStats').innerHTML=
+      `<div class="sum-row"><span>✂ Cięcie</span><span class="sum-val">${s.cutCount} elem. · ${fmt(s.cutLen)} mm</span></div>`
+      +`<div class="sum-row"><span>〜 Nacięcie</span><span class="sum-val">${s.scoreCount} elem. · ${fmt(s.scoreLen)} mm</span></div>`
+      +`<div class="sum-row"><span>▦ Grawer</span><span class="sum-val">${s.engraveCount} elem. · ${fmt(s.engraveArea)} mm²</span></div>`;
+    const cutSpeed=Math.max(1,Number(sumCutSpeed.value)||1);
+    const scoreSpeed=Math.max(1,Number(sumScoreSpeed.value)||1);
+    const engraveSpeed=Math.max(1,Number(sumEngraveSpeed.value)||1);
+    const engraveSpacing=Math.max(0.01,Number(sumEngraveSpacing.value)||0.1);
+    const cutTime=s.cutLen/cutSpeed, scoreTime=s.scoreLen/scoreSpeed, engraveTime=(s.engraveArea/engraveSpacing)/engraveSpeed;
+    document.getElementById('summaryTime').innerHTML=
+      `<div class="sum-time-row"><span>Cięcie</span><span>${formatTime(cutTime)}</span></div>`
+      +`<div class="sum-time-row"><span>Nacięcie</span><span>${formatTime(scoreTime)}</span></div>`
+      +`<div class="sum-time-row"><span>Grawer</span><span>${formatTime(engraveTime)}</span></div>`
+      +`<div class="sum-time-row total"><span>Razem (szacunkowo)</span><span>${formatTime(cutTime+scoreTime+engraveTime)}</span></div>`;
+  }
+  document.getElementById('summaryBtn').addEventListener('click',()=>{ renderSummary(); modalSummary.classList.add('open'); });
+  document.getElementById('modalSummaryClose').addEventListener('click',()=>modalSummary.classList.remove('open'));
+  modalSummary.addEventListener('click',e=>{ if(e.target===modalSummary) modalSummary.classList.remove('open'); });
+  [sumCutSpeed,sumScoreSpeed,sumEngraveSpeed,sumEngraveSpacing].forEach(inp=>inp.addEventListener('input',renderSummary));
+
   /* ---------------- Manager warstw 3D ---------------- */
   function renderDepthLegend(){
     const dlEl=document.getElementById('depthLegend'); if(!dlEl) return;
@@ -5020,7 +5129,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   document.fonts.ready.then(()=>{ _textOutlineCache.clear(); renderAll(); });
 
   // Hak debugowy do testów (Playwright) — bez wpływu na działanie edytora
-  window.__lzr={state, buildSeparatedSVG, buildLayerScene, mergeLayerRings, unionAll, objSubPolys, objSubPolysLocal, objSubPolysRepeated, textOutlinePolys, objBBox, rotatedBBox, selBBox, polyArea, polysBBoxMulti, polyToPathD, polyToSmoothPathD, renderAll, updateLive3D, renderProps, select, defaultsFor, zoomFit, repeatTransforms, exportSVG, buildGearPoints, simplifyRing, rasterizeTextOutlines, textNaturalBox, getTextRaster};
+  window.__lzr={state, buildSeparatedSVG, buildLayerScene, mergeLayerRings, unionAll, objSubPolys, objSubPolysLocal, objSubPolysRepeated, textOutlinePolys, objBBox, rotatedBBox, selBBox, polyArea, polyPerimeter, objInkArea, computeProjectStats, polysBBoxMulti, polyToPathD, polyToSmoothPathD, renderAll, updateLive3D, renderProps, select, defaultsFor, zoomFit, repeatTransforms, exportSVG, buildGearPoints, simplifyRing, rasterizeTextOutlines, textNaturalBox, getTextRaster};
 })();
 </script>
 </body>
