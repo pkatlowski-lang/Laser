@@ -325,6 +325,8 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       <input type="file" id="loadProjectInput" accept=".json,application/json" style="display:none">
       <button class="tbtn" id="importImageBtn" title="Importuj obraz (PNG/JPG) jako warstwę pomocniczą do przerysowania — nie jest cięty ani eksportowany">🖼 Importuj obraz</button>
       <input type="file" id="importImageInput" accept="image/*" style="display:none">
+      <button class="tbtn" id="importSvgBtn" title="Importuj plik SVG jako edytowalne obiekty — kolory cięcia/grawerowania/nacięcia rozpoznawane automatycznie (czerwony=cięcie, niebieski=nacięcie, czarny=grawer)">📐 Importuj SVG</button>
+      <input type="file" id="importSvgInput" accept=".svg,image/svg+xml" style="display:none">
     </div>
     <div class="tgroup">
       <button class="tbtn" id="loadFontsBtn" title="Wczytaj czcionki zainstalowane na komputerze (Chrome/Edge)">🔤 Czcionki z PC</button>
@@ -2653,6 +2655,12 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   document.getElementById('importImageInput').addEventListener('change',e=>{
     importImageFile(e.target.files[0]);
   });
+  document.getElementById('importSvgBtn').addEventListener('click',()=>{
+    const inp=document.getElementById('importSvgInput'); inp.value=''; inp.click();
+  });
+  document.getElementById('importSvgInput').addEventListener('change',e=>{
+    importSvgAsObjects(e.target.files[0]); e.target.value='';
+  });
   const WHEEL_HINT='Przewiń kółkiem myszy nad polem, aby zmienić wartość (Shift = większy krok ×10)';
   function rangeField(label,prop,val,min,max,step,o){
     const bound=o&&isBound(o,prop);
@@ -4332,6 +4340,188 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     }
   }
 
+  /* ---- Macierze afiniczne 2D (do odtwarzania <g transform="..."> przy imporcie SVG) ----
+     Macierz [a,b,c,d,e,f] reprezentuje: x'=a*x+c*y+e, y'=b*x+d*y+f (konwencja SVG). */
+  function matIdentity(){ return [1,0,0,1,0,0]; }
+  function matMultiply(m1,m2){
+    const [a1,b1,c1,d1,e1,f1]=m1, [a2,b2,c2,d2,e2,f2]=m2;
+    return [a1*a2+c1*b2, b1*a2+d1*b2, a1*c2+c1*d2, b1*c2+d1*d2, a1*e2+c1*f2+e1, b1*e2+d1*f2+f1];
+  }
+  function matApply(m,x,y){ return [m[0]*x+m[2]*y+m[4], m[1]*x+m[3]*y+m[5]]; }
+  // Bez obrotu/skosu (b=c=0, a=d) -> czyste skalowanie+przesunięcie; takie macierze można
+  // nałożyć przez scalePathD (zachowuje komendy łuków 'A' i współrzędne względne).
+  function isUniformScaleMat(m){
+    return Math.abs(m[1])<1e-9 && Math.abs(m[2])<1e-9 && Math.abs(m[0]-m[3])<1e-9;
+  }
+  // Parsuje atrybut transform="..." (translate/scale/rotate/skewX/skewY/matrix, dowolna
+  // kombinacja oddzielona spacjami) na macierz [a,b,c,d,e,f].
+  function parseTransformAttr(str){
+    let m=matIdentity();
+    if(!str) return m;
+    const re=/([a-zA-Z]+)\s*\(([^)]*)\)/g;
+    let mm;
+    while((mm=re.exec(str))){
+      const fn=mm[1].toLowerCase();
+      const args=(mm[2].trim().match(/-?\d*\.?\d+(?:[eE][-+]?\d+)?/g)||[]).map(Number);
+      let t=matIdentity();
+      if(fn==='translate') t=[1,0,0,1, args[0]||0, args[1]||0];
+      else if(fn==='scale'){ const sx=args.length?args[0]:1, sy=args.length>1?args[1]:sx; t=[sx,0,0,sy,0,0]; }
+      else if(fn==='rotate'){
+        const a=deg2rad(args[0]||0), cos=Math.cos(a), sin=Math.sin(a);
+        t=[cos,sin,-sin,cos,0,0];
+        if(args.length>=3){
+          const cx=args[1], cy=args[2];
+          t=matMultiply(matMultiply([1,0,0,1,cx,cy],t),[1,0,0,1,-cx,-cy]);
+        }
+      }
+      else if(fn==='skewx') t=[1,0,Math.tan(deg2rad(args[0]||0)),1,0,0];
+      else if(fn==='skewy') t=[1,Math.tan(deg2rad(args[0]||0)),0,1,0,0];
+      else if(fn==='matrix' && args.length>=6) t=[args[0],args[1],args[2],args[3],args[4],args[5]];
+      m=matMultiply(m,t);
+    }
+    return m;
+  }
+
+  /* Łuk eliptyczny SVG (komenda A) -> sekwencja krzywych Beziera 3-go stopnia (segmenty
+     <=90°), wg standardowego algorytmu z dodatku F.6 specyfikacji SVG. Potrzebne, bo
+     krzywe Beziera (w odróżnieniu od łuków) są niezmiennicze względem transformacji
+     afinicznych - przekształcenie punktów kontrolnych daje poprawną przekształconą krzywą. */
+  function arcToBezierSegs(x1,y1, rx,ry, rotDeg, largeArc, sweep, x2,y2){
+    if(rx===0||ry===0||(x1===x2&&y1===y2)) return [{cp1:[x1,y1],cp2:[x2,y2],end:[x2,y2]}];
+    rx=Math.abs(rx); ry=Math.abs(ry);
+    const phi=deg2rad(((rotDeg%360)+360)%360), cosPhi=Math.cos(phi), sinPhi=Math.sin(phi);
+    const dx2=(x1-x2)/2, dy2=(y1-y2)/2;
+    const x1p=cosPhi*dx2+sinPhi*dy2, y1p=-sinPhi*dx2+cosPhi*dy2;
+    let rxSq=rx*rx, rySq=ry*ry;
+    const x1pSq=x1p*x1p, y1pSq=y1p*y1p;
+    const lambda=x1pSq/rxSq+y1pSq/rySq;
+    if(lambda>1){ const s=Math.sqrt(lambda); rx*=s; ry*=s; rxSq=rx*rx; rySq=ry*ry; }
+    const sign=largeArc!==sweep?1:-1;
+    const num=Math.max(0, rxSq*rySq-rxSq*y1pSq-rySq*x1pSq);
+    const den=rxSq*y1pSq+rySq*x1pSq;
+    const coef=den>1e-12 ? sign*Math.sqrt(num/den) : 0;
+    const cxp=coef*(rx*y1p/ry), cyp=coef*(-ry*x1p/rx);
+    const cx=cosPhi*cxp-sinPhi*cyp+(x1+x2)/2, cy=sinPhi*cxp+cosPhi*cyp+(y1+y2)/2;
+    const vecAngle=(ux,uy,vx,vy)=>{
+      const sg=(ux*vy-uy*vx)<0?-1:1;
+      const dot=clamp((ux*vx+uy*vy)/(Math.hypot(ux,uy)*Math.hypot(vx,vy)||1),-1,1);
+      return sg*Math.acos(dot);
+    };
+    const theta1=vecAngle(1,0,(x1p-cxp)/rx,(y1p-cyp)/ry);
+    let dTheta=vecAngle((x1p-cxp)/rx,(y1p-cyp)/ry,(-x1p-cxp)/rx,(-y1p-cyp)/ry);
+    if(!sweep && dTheta>0) dTheta-=2*Math.PI;
+    if(sweep && dTheta<0) dTheta+=2*Math.PI;
+    const numSegs=Math.max(1,Math.ceil(Math.abs(dTheta)/(Math.PI/2)));
+    const delta=dTheta/numSegs, k=4/3*Math.tan(delta/4);
+    const segs=[]; let theta=theta1;
+    for(let i=0;i<numSegs;i++){
+      const theta2=theta+delta;
+      const c1t=Math.cos(theta), s1t=Math.sin(theta), c2t=Math.cos(theta2), s2t=Math.sin(theta2);
+      const map=(ux,uy)=>{ const ex=rx*ux, ey=ry*uy; return [cx+cosPhi*ex-sinPhi*ey, cy+sinPhi*ex+cosPhi*ey]; };
+      segs.push({ cp1: map(c1t-k*s1t, s1t+k*c1t), cp2: map(c2t+k*s2t, s2t-k*c2t), end: map(c2t, s2t) });
+      theta=theta2;
+    }
+    return segs;
+  }
+  // Parsuje "d" na sekwencję segmentów absolutnych {cmd:'M'|'L'|'C'|'Z', pts:[...]}.
+  // H/V/S/Q/T sprowadzane do L/C, łuki A zamieniane na C (arcToBezierSegs).
+  function parsePathToAbsSegs(d){
+    const tokens=d.match(/[MmLlHhVvCcSsQqTtAaZz]|[-+]?(?:\d*\.\d+|\d+\.?)(?:[eE][-+]?\d+)?/g)||[];
+    let i=0, cur=[0,0], start=[0,0], prevC=null, prevQ=null, cmd=null;
+    const segs=[];
+    const num=()=>parseFloat(tokens[i++]);
+    while(i<tokens.length){
+      if(/[A-Za-z]/.test(tokens[i])){ cmd=tokens[i]; i++; }
+      if(cmd===null) break;
+      const rel=cmd===cmd.toLowerCase(), C=cmd.toUpperCase();
+      switch(C){
+        case 'M': { let x=num(),y=num(); if(rel){x+=cur[0];y+=cur[1];} segs.push({cmd:'M',pts:[[x,y]]}); cur=[x,y]; start=[x,y]; prevC=prevQ=null; cmd=rel?'l':'L'; break; }
+        case 'L': { let x=num(),y=num(); if(rel){x+=cur[0];y+=cur[1];} segs.push({cmd:'L',pts:[[x,y]]}); cur=[x,y]; prevC=prevQ=null; break; }
+        case 'H': { let x=num(); if(rel)x+=cur[0]; segs.push({cmd:'L',pts:[[x,cur[1]]]}); cur=[x,cur[1]]; prevC=prevQ=null; break; }
+        case 'V': { let y=num(); if(rel)y+=cur[1]; segs.push({cmd:'L',pts:[[cur[0],y]]}); cur=[cur[0],y]; prevC=prevQ=null; break; }
+        case 'C': { let x1=num(),y1=num(),x2=num(),y2=num(),x=num(),y=num();
+          if(rel){x1+=cur[0];y1+=cur[1];x2+=cur[0];y2+=cur[1];x+=cur[0];y+=cur[1];}
+          segs.push({cmd:'C',pts:[[x1,y1],[x2,y2],[x,y]]}); cur=[x,y]; prevC=[x2,y2]; prevQ=null; break; }
+        case 'S': { let x2=num(),y2=num(),x=num(),y=num();
+          if(rel){x2+=cur[0];y2+=cur[1];x+=cur[0];y+=cur[1];}
+          const x1=prevC?2*cur[0]-prevC[0]:cur[0], y1=prevC?2*cur[1]-prevC[1]:cur[1];
+          segs.push({cmd:'C',pts:[[x1,y1],[x2,y2],[x,y]]}); cur=[x,y]; prevC=[x2,y2]; prevQ=null; break; }
+        case 'Q': { let x1=num(),y1=num(),x=num(),y=num();
+          if(rel){x1+=cur[0];y1+=cur[1];x+=cur[0];y+=cur[1];}
+          const c1=[cur[0]+2/3*(x1-cur[0]),cur[1]+2/3*(y1-cur[1])], c2=[x+2/3*(x1-x),y+2/3*(y1-y)];
+          segs.push({cmd:'C',pts:[c1,c2,[x,y]]}); cur=[x,y]; prevQ=[x1,y1]; prevC=null; break; }
+        case 'T': { let x=num(),y=num(); if(rel){x+=cur[0];y+=cur[1];}
+          const qx=prevQ?2*cur[0]-prevQ[0]:cur[0], qy=prevQ?2*cur[1]-prevQ[1]:cur[1];
+          const c1=[cur[0]+2/3*(qx-cur[0]),cur[1]+2/3*(qy-cur[1])], c2=[x+2/3*(qx-x),y+2/3*(qy-y)];
+          segs.push({cmd:'C',pts:[c1,c2,[x,y]]}); cur=[x,y]; prevQ=[qx,qy]; prevC=null; break; }
+        case 'A': { let rx=num(),ry=num(),rot=num(),laf=num(),sf=num(),x=num(),y=num();
+          if(rel){x+=cur[0];y+=cur[1];}
+          arcToBezierSegs(cur[0],cur[1],rx,ry,rot,laf!==0,sf!==0,x,y).forEach(s=>segs.push({cmd:'C',pts:[s.cp1,s.cp2,s.end]}));
+          cur=[x,y]; prevC=prevQ=null; break; }
+        case 'Z': segs.push({cmd:'Z',pts:[]}); cur=[...start]; prevC=prevQ=null; break;
+        default: i++; break;
+      }
+    }
+    return segs;
+  }
+  // Stosuje pełną macierz afiniczną (z obrotem/skosem) do "d" - łuki są wcześniej
+  // zamieniane na Beziery (patrz arcToBezierSegs).
+  function transformPathDGeneral(d, mat){
+    const segs=parsePathToAbsSegs(d);
+    const tp=p=>{ const r=matApply(mat,p[0],p[1]); return fmt(r[0])+' '+fmt(r[1]); };
+    return segs.map(s=>{
+      if(s.cmd==='Z') return 'Z';
+      if(s.cmd==='M') return 'M'+tp(s.pts[0]);
+      if(s.cmd==='L') return 'L'+tp(s.pts[0]);
+      return 'C'+tp(s.pts[0])+' '+tp(s.pts[1])+' '+tp(s.pts[2]);
+    }).join('');
+  }
+
+  /* Odczytuje wartość właściwości CSS (fill/stroke/fill-rule) elementu SVG z atrybutu
+     style="" lub atrybutu prezentacyjnego, z dziedziczeniem po przodkach (jak w SVG/CSS). */
+  function svgInheritedStyle(el, prop, fallback){
+    for(let node=el; node && node.nodeType===1; node=node.parentElement){
+      const styleAttr=node.getAttribute('style');
+      if(styleAttr){
+        const re=new RegExp('(?:^|;)\\s*'+prop+'\\s*:\\s*([^;]+)','i');
+        const m=styleAttr.match(re);
+        if(m) return m[1].trim();
+      }
+      const attr=node.getAttribute(prop);
+      if(attr!=null && attr.trim()!=='') return attr.trim();
+    }
+    return fallback;
+  }
+  const CSS_NAMED_COLORS={black:[0,0,0],white:[255,255,255],red:[255,0,0],blue:[0,0,255],
+    green:[0,128,0],yellow:[255,255,0],orange:[255,165,0],purple:[128,0,128],
+    gray:[128,128,128],grey:[128,128,128],cyan:[0,255,255],magenta:[255,0,255],
+    navy:[0,0,128],maroon:[128,0,0],lime:[0,255,0]};
+  function svgColorToRgb(str){
+    if(!str) return null;
+    const s=str.trim().toLowerCase();
+    if(s==='none'||s==='transparent') return null;
+    let m=s.match(/^#([0-9a-f]{3})$/);
+    if(m) return m[1].split('').map(c=>parseInt(c+c,16));
+    m=s.match(/^#([0-9a-f]{6})$/);
+    if(m) return [0,2,4].map(i=>parseInt(m[1].substr(i,2),16));
+    m=s.match(/^rgb\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/);
+    if(m) return [+m[1],+m[2],+m[3]];
+    return CSS_NAMED_COLORS[s]||null;
+  }
+  // Heurystyka jak w narzędziach do cięcia/grawerowania laserem: czerwony = cięcie,
+  // niebieski = nacięcie (score), czarny/ciemny wypełniony obszar = grawer; domyślnie cięcie.
+  function svgColorsToMode(fillStr, strokeStr){
+    const fill=svgColorToRgb(fillStr), stroke=svgColorToRgb(strokeStr);
+    const isRed=c=>c && (c[0]-c[1])>50 && (c[0]-c[2])>50 && c[0]>120;
+    const isBlue=c=>c && (c[2]-c[0])>40 && (c[2]-c[1])>30 && c[2]>120;
+    const isDark=c=>c && c[0]<90 && c[1]<90 && c[2]<90;
+    if(isRed(stroke)||isRed(fill)) return 'cut';
+    if(isBlue(stroke)||isBlue(fill)) return 'score';
+    if(isDark(fill)) return 'engrave';
+    if(isDark(stroke)) return 'engrave';
+    return 'cut';
+  }
+
   /* Import an SVG file: extract shapes, measure bbox, save as custom base. */
   function importSvgFile(file){
     if(!file) return;
@@ -4372,6 +4562,104 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
         custom:true
       };
       addCustomBase(base);
+    };
+    reader.readAsText(file);
+  }
+
+  /* Import an SVG file as separate, editable path objects (one object per shape),
+     unlike importSvgFile (which merges everything into one "custom base" for the
+     gallery). Handles nested <g transform="..."> chains (translate/scale/rotate/
+     skew/matrix), infers cut/engrave/score mode from fill/stroke colors, and scales
+     + centers the whole drawing to fit the document. */
+  function importSvgAsObjects(file){
+    if(!file) return;
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const parser=new DOMParser();
+      const svgDoc=parser.parseFromString(e.target.result,'image/svg+xml');
+      if(svgDoc.querySelector('parsererror')){ alert('Nieprawidłowy plik SVG'); return; }
+      const svgRoot=svgDoc.querySelector('svg');
+      if(!svgRoot){ alert('Brak elementu SVG'); return; }
+      const SHAPE_TAGS=new Set(['path','rect','circle','ellipse','polygon','polyline','line']);
+      const SKIP=new Set(['defs','symbol','clipPath','mask','filter','pattern','metadata','title','desc']);
+      const items=[];
+      (function walk(node, mat){
+        for(const child of node.children){
+          const tag=child.tagName.toLowerCase().replace(/^.*:/,'');
+          if(SKIP.has(tag)) continue;
+          const cumMat=matMultiply(mat, parseTransformAttr(child.getAttribute('transform')));
+          if(SHAPE_TAGS.has(tag)){
+            const localD=svgShapeElToD(child);
+            if(localD){
+              items.push({
+                localD, mat:cumMat,
+                mode: svgColorsToMode(svgInheritedStyle(child,'fill','black'), svgInheritedStyle(child,'stroke','none')),
+                fillRule: svgInheritedStyle(child,'fill-rule','nonzero')==='evenodd'?'evenodd':'nonzero'
+              });
+            }
+          }
+          if(child.children.length) walk(child, cumMat);
+        }
+      })(svgRoot, matIdentity());
+      if(!items.length){ alert('Brak rozpoznanych kształtów w pliku SVG'); return; }
+
+      const tmpSvg=document.createElementNS(SVG_NS,'svg');
+      tmpSvg.style.cssText='position:absolute;left:-9999px;top:-9999px;visibility:hidden;width:0;height:0';
+      document.body.appendChild(tmpSvg);
+      const tmpPath=document.createElementNS(SVG_NS,'path');
+      tmpSvg.appendChild(tmpPath);
+      function bboxOf(d){
+        tmpPath.setAttribute('d',d);
+        try{ return tmpPath.getBBox(); }catch(err){ return {x:0,y:0,width:0,height:0}; }
+      }
+
+      // Etap 1: każdy kształt przekształcony przez WŁASNĄ skumulowaną macierz (z <g>/transform
+      // w pliku SVG), żeby zmierzyć łączny bbox całego rysunku w jego oryginalnym układzie.
+      let combX1=Infinity,combY1=Infinity,combX2=-Infinity,combY2=-Infinity;
+      const prepared=[];
+      items.forEach(it=>{
+        const dMeasure=transformPathDGeneral(it.localD, it.mat);
+        const b=bboxOf(dMeasure);
+        if(b.width>0 && b.height>0){
+          combX1=Math.min(combX1,b.x); combY1=Math.min(combY1,b.y);
+          combX2=Math.max(combX2,b.x+b.width); combY2=Math.max(combY2,b.y+b.height);
+          prepared.push(it);
+        }
+      });
+      if(!prepared.length){ document.body.removeChild(tmpSvg); alert('Brak rozpoznanych kształtów w pliku SVG'); return; }
+
+      // Etap 2: skalowanie do rozmiaru arkusza (tylko zmniejszanie, jeśli rysunek jest większy
+      // niż dokument) + wycentrowanie. Dla kształtów bez obrotu/skosu (najczęstszy przypadek)
+      // złożona macierz pozostaje czystym skalowaniem+przesunięciem, więc scalePathD zachowuje
+      // oryginalne łuki 'A' - bez przybliżania ich Bezierami.
+      const combW=combX2-combX1, combH=combY2-combY1;
+      const scale=Math.min(1, (state.docW*0.92)/Math.max(combW,1e-6), (state.docH*0.92)/Math.max(combH,1e-6));
+      const matGlobal=[scale,0,0,scale, state.docW/2-(combX1+combW/2)*scale, state.docH/2-(combY1+combH/2)*scale];
+
+      const newObjs=prepared.map(it=>{
+        const matFinal=matMultiply(matGlobal, it.mat);
+        let d, ox, oy;
+        if(isUniformScaleMat(matFinal)){
+          d=scalePathD(it.localD, matFinal[0]);
+          ox=matFinal[4]; oy=matFinal[5];
+        } else {
+          d=transformPathDGeneral(it.localD, matFinal);
+          ox=0; oy=0;
+        }
+        const b=bboxOf(d);
+        return {
+          id:uid(), type:'path', name:'',
+          d, fillRule:it.fillRule,
+          bx:b.x, by:b.y, bw:Math.max(0.01,b.width), bh:Math.max(0.01,b.height),
+          x:ox, y:oy, rotation:0, sx:1, sy:1,
+          mode:it.mode, visible:true, locked:false, depth:1, repeat:{type:'none'}
+        };
+      });
+      document.body.removeChild(tmpSvg);
+
+      state.objects.push(...newObjs);
+      state.selectedIds=newObjs.map(o=>o.id);
+      pushHistory(); renderAll(); renderProps();
     };
     reader.readAsText(file);
   }
@@ -4473,7 +4761,8 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     const f=e.target.files[0]; if(f) importSvgFile(f); e.target.value='';
   });
 
-  // Przeciągnij i upuść pliki SVG (kształty wektorowe) lub obrazy (PNG/JPG jako
+  // Przeciągnij i upuść pliki SVG (kształty wektorowe, importowane jako edytowalne
+  // obiekty z rozpoznanymi kolorami cięcia/grawerowania) lub obrazy (PNG/JPG jako
   // kalka pomocnicza do przerysowania) bezpośrednio na płytę roboczą.
   const stageEl=canvas.closest('.stage');
   ['dragenter','dragover'].forEach(evt=>stageEl.addEventListener(evt, e=>{
@@ -4484,7 +4773,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     const files=e.dataTransfer && e.dataTransfer.files; if(!files || !files.length) return;
     e.preventDefault();
     for(const file of files){
-      if(/svg/i.test(file.type) || /\.svg$/i.test(file.name)) importSvgFile(file);
+      if(/svg/i.test(file.type) || /\.svg$/i.test(file.name)) importSvgAsObjects(file);
       else if(/^image\//.test(file.type)) importImageFile(file);
     }
   });
