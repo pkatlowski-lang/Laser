@@ -326,6 +326,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     </div>
     <div class="tgroup">
       <button class="tbtn" id="snapBtn" title="Przyciągaj do siatki">⊞ Siatka</button>
+      <button class="tbtn" id="arrangeBtn" title="Rozmieść automatycznie — ułóż wszystkie elementy (odblokowane) jeden przy drugim na arkuszu, by zmieścić jak najwięcej na materiale">📐 Rozmieść</button>
     </div>
     <div class="tgroup">
       <button class="tbtn" id="newProjectBtn" title="Nowy projekt — wyczyść płótno i zacznij od nowa">🆕 Nowy</button>
@@ -2417,6 +2418,37 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       if(axis==='h') b.o.x+=target-cur; else b.o.y+=target-cur; });
     pushHistory(); renderAll(); renderProps();
   }
+  /* ---- Automatyczne rozmieszczenie elementów na arkuszu (oszczędność materiału) ----
+     Układa wszystkie odblokowane elementy (grupy traktowane jako jedna całość) jeden
+     przy drugim, rząd po rzędzie, od lewego górnego rogu arkusza, z małym odstępem. */
+  function autoArrange(){
+    const gap=2;
+    const seenGid=new Set(), items=[];
+    state.objects.forEach(o=>{
+      if(o.groupId){
+        if(seenGid.has(o.groupId)) return;
+        seenGid.add(o.groupId);
+        const members=state.objects.filter(g=>g.groupId===o.groupId);
+        if(members.some(m=>m.locked)) return;
+        items.push({members});
+      } else if(!o.locked){
+        items.push({members:[o]});
+      }
+    });
+    if(!items.length) return;
+    items.forEach(it=>it.bb=selBBox(it.members));
+    items.sort((a,b)=>b.bb.h-a.bb.h);
+    const maxW=state.docW;
+    let x=gap, y=gap, rowH=0;
+    items.forEach(it=>{
+      const {minx,miny,w,h}=it.bb;
+      if(x>gap && x+w>maxW-gap){ x=gap; y+=rowH+gap; rowH=0; }
+      const dx=x-minx, dy=y-miny;
+      it.members.forEach(o=>{ o.x+=dx; o.y+=dy; });
+      x+=w+gap; rowH=Math.max(rowH,h);
+    });
+    pushHistory(); renderAll(); renderProps(); scheduleLive3D();
+  }
   function renderMultiProps(sel){
     let h=`<div class="empty-note" style="padding-bottom:4px">Zaznaczono elementów: <strong style="color:var(--text)">${sel.length}</strong></div>`;
     // wspólny prostokąt zaznaczenia — pozwala numerycznie przesunąć (X/Y) i przeskalować
@@ -3150,6 +3182,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   setSnap(state.snap,false);
   snapBtn.addEventListener('click',()=>setSnap(!state.snap,true));
   snapInput.addEventListener('change',()=>setSnap(snapInput.checked,true));
+  document.getElementById('arrangeBtn').addEventListener('click',autoArrange);
 
   /* ---------------- Rozmiar arkusza roboczego ---------------- */
   const docWInput=document.getElementById('docWInput'), docHInput=document.getElementById('docHInput'), docPreset=document.getElementById('docPreset');
