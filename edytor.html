@@ -1536,6 +1536,12 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     // dostaje pełną wysokość glifu (jak dla N=1), kolejne wiersze przesuwają linię
     // bazową o 1.2*fs (lineStep) w dół, więc canvas musi być o tyle wyższy.
     const calcGh=s=>Math.ceil(fs*2.4*s)+8+Math.ceil((N-1)*fs*1.2*s);
+    // przy małych rozmiarach czcionki SCALE=6 daje zbyt mało pikseli na krzywiznę liter
+    // (np. dla fontSize=10 cały glif ma ~60px wysokości) - podnosimy SCALE tak, by
+    // POJEDYNCZY wiersz miał co najmniej ~900px, niezależnie od liczby wierszy
+    const MINLINEDIM=900;
+    const lineGh0=Math.ceil(fs*2.4*SCALE)+8;
+    if(lineGh0<MINLINEDIM) SCALE=SCALE*MINLINEDIM/lineGh0;
     let gh=calcGh(SCALE);
     const MAXDIM=1400;
     if(gh>MAXDIM){ SCALE=Math.max(1,SCALE*MAXDIM/gh); gh=calcGh(SCALE); }
@@ -1580,7 +1586,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
           any=true;
           const penOffset=cum-totalW/2;
           traceMaskPolys(mask,gw_c,gh).forEach(poly=>{
-            const sp=simplifyRing(poly,0.5);
+            const sp=simplifyRing(poly,1.2);
             allPolys.push(sp.map(([px,py])=>[(px-PAD+penOffset)/SCALE, py/SCALE]));
           });
         }
