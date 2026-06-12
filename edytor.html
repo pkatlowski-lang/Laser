@@ -538,6 +538,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
         <div class="sc-row"><span>Duplikuj przeciągając</span><span class="sc-keys"><kbd>Alt</kbd>+przeciągnij</span></div>
         <div class="sc-row"><span>Usuń zaznaczone</span><span class="sc-keys"><kbd>Del</kbd></span></div>
         <div class="sc-row"><span>Zaznacz wszystko</span><span class="sc-keys"><kbd>Ctrl</kbd>+<kbd>A</kbd></span></div>
+        <div class="sc-row"><span>Odwróć zaznaczenie</span><span class="sc-keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd></span></div>
         <div class="sc-row"><span>Grupuj</span><span class="sc-keys"><kbd>Ctrl</kbd>+<kbd>G</kbd></span></div>
         <div class="sc-row"><span>Rozgrupuj</span><span class="sc-keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd></span></div>
       </div>
@@ -1091,6 +1092,14 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       });
     }
     return [...result];
+  }
+  // Odwróć zaznaczenie: zaznacza wszystkie odblokowane elementy, które NIE są
+  // aktualnie zaznaczone (a odznacza te, które były zaznaczone)
+  function invertSelection(){
+    const cur=new Set(state.selectedIds);
+    const ids=state.objects.filter(o=>!o.locked && !cur.has(o.id)).map(o=>o.id);
+    state.selectedIds=expandGroupSelection(ids);
+    renderOverlay(); renderLayers(); renderProps();
   }
   function select(id){
     const next = id? expandGroupSelection([id]) : [];
@@ -3136,6 +3145,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='c'){ if(!typing){ e.preventDefault(); copySel(); } return; }
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='v'){ if(!typing){ e.preventDefault(); pasteClipboard(); } return; }
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='a'){ if(!typing){ e.preventDefault(); state.selectedIds=expandGroupSelection(state.objects.filter(o=>!o.locked).map(o=>o.id)); renderOverlay(); renderLayers(); renderProps(); } return; }
+    if((e.ctrlKey||e.metaKey)&&e.shiftKey&&e.key.toLowerCase()==='i'){ if(!typing){ e.preventDefault(); invertSelection(); } return; }
     if((e.ctrlKey||e.metaKey)&&(e.key===']'||e.key==='[')){ if(!typing){ e.preventDefault();
       if(e.key===']') e.shiftKey?bringToFront():bringForward();
       else e.shiftKey?sendToBack():sendBackward();
@@ -3231,6 +3241,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       h+=ctxItem('⧉ Duplikuj <span class="ctx-key">Ctrl+D</span>','duplicate');
       h+=ctxItem('⎘ Kopiuj <span class="ctx-key">Ctrl+C</span>','copy');
       h+=ctxItem('🗑 Usuń <span class="ctx-key">Del</span>','delete');
+      h+=ctxItem('🔄 Odwróć zaznaczenie <span class="ctx-key">Ctrl+Shift+I</span>','invertsel',{disabled:!state.objects.some(o=>!o.locked)});
       h+='<hr>';
       h+=ctxItem('⤒ Na wierzch <span class="ctx-key">Ctrl+Shift+]</span>','front');
       h+=ctxItem('⬆ Wyżej <span class="ctx-key">Ctrl+]</span>','forward');
@@ -3277,6 +3288,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       case 'flipx': if(o){ o.flipX=!o.flipX; renderProps(); renderAll(); pushHistory(); scheduleLive3D(); } break;
       case 'flipy': if(o){ o.flipY=!o.flipY; renderProps(); renderAll(); pushHistory(); scheduleLive3D(); } break;
       case 'selectall': state.selectedIds=expandGroupSelection(state.objects.filter(x=>!x.locked).map(x=>x.id)); renderOverlay(); renderLayers(); renderProps(); break;
+      case 'invertsel': invertSelection(); break;
       case 'zoomfit': zoomFit(); break;
     }
     closeCtxMenu();
