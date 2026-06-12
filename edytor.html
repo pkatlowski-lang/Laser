@@ -3543,7 +3543,11 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   // rasterMergeRings — bez sztucznych linii wewnętrznych na częściach wspólnych.
   // dep = numer warstwy, dla której budujemy plik (objs to już elementy z warstw >= dep).
   function mergeLayerRings(objs, dep){
-    const fillGroups=[], holeCutouts=[];
+    const fillGroups=[], holeCutouts=[], lineRings=[];
+    // poligony o znikomej powierzchni (np. otwarte linie nacięć z generatora zawiasu) nie mają
+    // czego wypełnić/wyciąć przy rasteryzacji — suma/różnica z polem ~0 nie zmienia maski i taka
+    // linia by zniknęła. Zwracamy je wprost jako osobne linie cięcia, dorzucone do wyniku.
+    const LINE_AREA_EPS=1e-4;
     objs.forEach(o=>{
       let basePolys=objSubPolys(o);
       if(o.type==='text' && !basePolys.length){
@@ -3565,12 +3569,13 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       const meta=rings.map(r=>({pts:r, area:Math.abs(polyArea(r)), c:polyCentroid(r)}));
       const shells=[], holes=[];
       meta.forEach(r=>{
+        if(r.area<LINE_AREA_EPS){ lineRings.push(r.pts); return; }
         const isHole=meta.some(o2=>o2!==r && o2.area>r.area && pointInPoly(r.c,o2.pts));
         (isHole?holes:shells).push(r.pts);
       });
       if(shells.length) fillGroups.push({shells,holes});
     });
-    if(!fillGroups.length) return [];
+    if(!fillGroups.length) return lineRings;
     // Grupowanie metodą "union-find" wg nakładania się obwiedni (bbox): rasteryzujemy
     // TYLKO te grupy obiektów, które faktycznie się nakładają i wymagają scalenia.
     // Obiekty bez kolizji zwracamy z dokładnymi konturami wektorowymi (bez utraty
@@ -3586,7 +3591,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     for(let i=0;i<all.length;i++) for(let j=i+1;j<all.length;j++) if(bbOverlap(all[i].bb,all[j].bb)) union(i,j);
     const groupsByRoot=new Map();
     all.forEach((it,i)=>{ const r=find(i); if(!groupsByRoot.has(r)) groupsByRoot.set(r,[]); groupsByRoot.get(r).push(it); });
-    const result=[];
+    const result=[...lineRings];
     groupsByRoot.forEach(groupItems=>{
       const fg=groupItems.filter(it=>it.fill).map(it=>it.fill);
       const hc=groupItems.filter(it=>it.hole).map(it=>it.hole);
@@ -3848,10 +3853,14 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     let col=0;
     for(let x=margin; x+kerf<=x1+1e-9; x+=pitchX, col++){
       const off=(col%2===0)?0:-period/2;
+      // każde nacięcie = pojedyncza linia (kerf to fizyczna szerokość rzazu lasera, nie
+      // rysowany prostokąt) — bez łączących krótkich odcinków poziomych/pionowych,
+      // dzięki czemu wzór wygląda jak linie z przerwami, a nie ząbkowane "klocki"
+      const cx=x+kerf/2;
       for(let y=y0+off; y<y1-1e-9; y+=period){
         const a=Math.max(y0,y), b=Math.min(y1,y+slitLen);
         if(b-a>=Math.min(2,slitLen)){
-          d+=`M${fmt(x)} ${fmt(a)}L${fmt(x+kerf)} ${fmt(a)}L${fmt(x+kerf)} ${fmt(b)}L${fmt(x)} ${fmt(b)}Z`;
+          d+=`M${fmt(cx)} ${fmt(a)}L${fmt(cx)} ${fmt(b)}`;
           count++;
         }
       }
@@ -3874,12 +3883,12 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     if(!count){ alert('Przy tych parametrach nie zmieści się ani jedno nacięcie — zmniejsz margines, długość nacięcia lub odstępy.'); return; }
     const px=20, py=20;
     const panel={...defaultsFor('rect'),x:px,y:py,w:W,h:H,rx:0,mode:'cut',name:'Panel z zawiasem'};
-    const holes={id:uid(),type:'path',name:'Nacięcia zawiasu',d,fillRule:'nonzero',role:'hole',
+    const slits={id:uid(),type:'path',name:'Nacięcia zawiasu',d,
       bx:0,by:0,bw:W,bh:H,x:px,y:py,rotation:0,mode:'cut',visible:true,locked:false,depth:state.depth||1,repeat:{type:'none'}};
     if(px+W>state.docW || py+H>state.docH){
       applyDocSize(Math.max(state.docW,Math.ceil(px+W+5)), Math.max(state.docH,Math.ceil(py+H+5)));
     }
-    state.objects.push(panel,holes); state.selectedIds=[panel.id,holes.id];
+    state.objects.push(panel,slits); state.selectedIds=[panel.id,slits.id];
     pushHistory(); renderAll(); renderProps(); zoomFit();
     modalHinge.classList.remove('open');
   });
