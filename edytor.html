@@ -1410,33 +1410,62 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   // kontury w "naturalnej" przestrzeni mm (px/SCALE) razem z ich łącznym bboxem (ciasny
   // obrys atramentu liter, BEZ marginesów wynikających z metryk czcionki) oraz punktem
   // zakotwiczenia odpowiadającym (o.x, baseline) — do dopasowania w objBBox()/textOutlinePolys().
+  // Każdy znak rasteryzowany jest osobno na współdzielonym <canvas> przy stałym SCALE (domyślnie 6),
+  // niezależnie od długości całego napisu — dzięki temu krzywe liter (np. "o", "a", "8") są
+  // zawsze śledzone z pełną rozdzielczością, a długie etykiety nie robią się "schodkowe".
+  // Pozycje znaków liczone są z metryk czcionki (ctx.measureText) i składane w jeden zestaw
+  // poligonów w spójnym układzie współrzędnych (środek poziomy = x=0, linia bazowa = anchor.y).
   function rasterizeTextOutlines(o){
     const text=(o.text||'');
     if(!text.trim()) return null;
     const fs=Math.max(1,o.fontSize||24);
     let SCALE=6;
-    let gw=Math.ceil(text.length*fs*1.3*SCALE)+8, gh=Math.ceil(fs*2.4*SCALE)+8;
+    let gh=Math.ceil(fs*2.4*SCALE)+8;
     const MAXDIM=1400;
-    if(gw>MAXDIM||gh>MAXDIM){ const f=MAXDIM/Math.max(gw,gh); SCALE=Math.max(1,SCALE*f);
-      gw=Math.ceil(text.length*fs*1.3*SCALE)+8; gh=Math.ceil(fs*2.4*SCALE)+8; }
-    const cnv=document.createElement('canvas'); cnv.width=gw; cnv.height=gh;
+    if(gh>MAXDIM){ SCALE=Math.max(1,SCALE*MAXDIM/gh); gh=Math.ceil(fs*2.4*SCALE)+8; }
+    const fontStr=`${o.italic?'italic ':''}${o.bold?'bold ':''}${(fs*SCALE).toFixed(2)}px ${o.font}`;
+    const mctx=document.createElement('canvas').getContext('2d');
+    mctx.font=fontStr;
+    const chars=[...text];
+    const widths=chars.map(ch=>mctx.measureText(ch).width);
+    const totalW=mctx.measureText(text).width || widths.reduce((a,b)=>a+b,0);
+    const PAD=Math.ceil(fs*SCALE*0.4)+4;
+    // jeden, wielokrotnie wykorzystywany canvas (rozmiar = najszerszy znak) — unika kosztu
+    // tworzenia nowego <canvas>/kontekstu dla każdego znaku z osobna
+    const maxAdvance=Math.max(0,...chars.map((ch,i)=>/\S/.test(ch)?widths[i]:0));
+    const gw_max=Math.max(1,Math.ceil(maxAdvance))+PAD*2;
+    const cnv=document.createElement('canvas'); cnv.width=gw_max; cnv.height=gh;
     const ctx=cnv.getContext('2d');
-    ctx.save();
-    ctx.translate(gw/2, gh*0.62);
-    ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+    ctx.textAlign='left'; ctx.textBaseline='alphabetic';
     ctx.fillStyle='#000';
-    ctx.font=`${o.italic?'italic ':''}${o.bold?'bold ':''}${(fs*SCALE).toFixed(2)}px ${o.font}`;
-    ctx.fillText(text,0,0);
-    ctx.restore();
-    let img; try{ img=ctx.getImageData(0,0,gw,gh).data; }catch(e){ return null; }
-    const mask=new Uint8Array(gw*gh);
-    let any=false;
-    for(let i=0;i<gw*gh;i++){ const v=img[i*4+3]>128?1:0; mask[i]=v; if(v) any=true; }
+    ctx.font=fontStr;
+    const allPolys=[];
+    let cum=0, any=false;
+    for(let i=0;i<chars.length;i++){
+      const ch=chars[i], w=widths[i];
+      if(!/\S/.test(ch)){ cum+=w; continue; } // spacje/odstępy: bez atramentu, tylko przesunięcie
+      const gw_c=Math.max(1,Math.ceil(w))+PAD*2;
+      ctx.clearRect(0,0,gw_max,gh);
+      ctx.save();
+      ctx.translate(PAD, gh*0.62);
+      ctx.fillText(ch,0,0);
+      ctx.restore();
+      let img; try{ img=ctx.getImageData(0,0,gw_c,gh).data; }catch(e){ cum+=w; continue; }
+      const mask=new Uint8Array(gw_c*gh);
+      let hasInk=false;
+      for(let p=0;p<gw_c*gh;p++){ const v=img[p*4+3]>128?1:0; mask[p]=v; if(v) hasInk=true; }
+      if(hasInk){
+        any=true;
+        const penOffset=cum-totalW/2;
+        traceMaskPolys(mask,gw_c,gh).forEach(poly=>{
+          const sp=simplifyRing(poly,0.5);
+          allPolys.push(sp.map(([px,py])=>[(px-PAD+penOffset)/SCALE, py/SCALE]));
+        });
+      }
+      cum+=w;
+    }
     if(!any) return null;
-    let polys=traceMaskPolys(mask,gw,gh);
-    if(!polys.length) return null;
-    polys=polys.map(p=>simplifyRing(p,0.8).map(([px,py])=>[px/SCALE,py/SCALE]));
-    return {polys, nb:polysBBoxMulti(polys), anchor:{x:gw/(2*SCALE), y:gh*0.62/SCALE}};
+    return {polys:allPolys, nb:polysBBoxMulti(allPolys), anchor:{x:0, y:gh*0.62/SCALE}};
   }
   // Rasteryzacja zależy tylko od treści/czcionki/stylu — tsx/tsy/flip/rotation nakładane są
   // już na wynik (objBBox/textOutlinePolys), więc NIE wchodzą do klucza pamięci podręcznej.
