@@ -1559,7 +1559,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   function finalizeBoolean(sel, dStr, bb, mode){
     const result={id:uid(),type:'path',name:'Wynik operacji',d:dStr,fillRule:'evenodd',
       bx:bb.minx,by:bb.miny,bw:Math.max(1,bb.maxx-bb.minx),bh:Math.max(1,bb.maxy-bb.miny),
-      x:0,y:0,rotation:0,mode:mode||'cut',visible:true,locked:false,depth:1,repeat:{type:'none'}};
+      x:0,y:0,rotation:0,mode:mode||'cut',visible:true,locked:false,depth:sel[0].depth||1,repeat:{type:'none'}};
     const insertAt=Math.min(...sel.map(o=>state.objects.indexOf(o)));
     state.objects=state.objects.filter(o=>!sel.includes(o));
     state.objects.splice(insertAt,0,result);
