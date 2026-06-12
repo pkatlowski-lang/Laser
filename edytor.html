@@ -216,6 +216,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 .layer3d-card svg{width:120px;height:76px;overflow:visible;background:#111;border-radius:5px;border:1px solid var(--border)}
 .modal-note{margin-top:16px;font-size:.76rem;color:var(--muted);line-height:1.7;border-top:1px solid var(--border);padding-top:12px}
 
+/* ---- Biblioteka materiałów (modal) ---- */
+.mat-list{display:flex;flex-direction:column;gap:6px;margin-top:14px}
+.mat-row{display:flex;align-items:center;gap:8px;padding:6px 9px;border:1px solid var(--border);border-radius:7px;background:var(--surface2);font-size:.8rem}
+.mat-row .mat-label{flex:1}
+.mat-row .mat-del{background:none;border:none;color:var(--muted);cursor:pointer;font-size:.9rem;padding:2px;line-height:1}
+.mat-row .mat-del:hover{color:#e76f51}
+.mat-empty{font-size:.74rem;color:var(--muted);line-height:1.5}
+
 /* ---- Skróty klawiszowe (modal) ---- */
 .shortcuts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px 28px;margin-top:16px}
 .sc-group h4{margin:0 0 8px;font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--accent)}
@@ -275,6 +283,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
 .lyr-pick{border:none;color:#fff;font-size:.72rem;font-weight:700;padding:4px 9px;border-radius:5px;cursor:pointer;flex:0 0 auto}
 .lyr-pick:hover{filter:brightness(1.2)}
 .lyr-cnt{font-size:.68rem;color:var(--muted);flex:1;white-space:nowrap}
+.lyr-mat{width:78px;flex:0 0 78px;padding:3px 4px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:.7rem;font-family:inherit}
 .lyr-mm{width:50px;flex:0 0 50px;padding:3px 5px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:.74rem;font-family:inherit}
 .lyr-unit{font-size:.66rem;color:var(--muted)}
 .lyr-eye{background:none;border:none;cursor:pointer;font-size:.85rem;padding:2px;line-height:1}
@@ -593,6 +602,22 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   </div>
 </div>
 
+<div class="modal-ov" id="modalMaterials">
+  <div class="modal-box" style="max-width:480px">
+    <button class="modal-close" id="modalMaterialsClose" title="Zamknij">✕</button>
+    <h3>📦 Biblioteka materiałów</h3>
+    <p style="font-size:.78rem;color:var(--muted);margin:0 0 10px;line-height:1.5">Dodaj własne materiały (nazwa + grubość w mm), aby szybko ustawiać grubość warstw 3D z listy „Materiał…” przy warstwie.</p>
+    <div class="field"><label>Nowy materiał</label>
+      <div class="row2">
+        <input type="text" id="matName" placeholder="np. Sklejka topolowa" style="flex:2">
+        <input type="number" id="matMM" placeholder="mm" min="0.1" max="60" step="0.5" style="flex:0 0 70px">
+      </div>
+    </div>
+    <button type="button" class="tbtn" id="matAddBtn" style="width:100%;justify-content:center;margin-top:4px">+ Dodaj materiał</button>
+    <div class="mat-list" id="matList"></div>
+  </div>
+</div>
+
 <script>
 (function(){
   const SVG_NS='http://www.w3.org/2000/svg';
@@ -712,6 +737,33 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   };
   function layerMM(dep){ const v=state.layerMM[dep]; return (v==null||isNaN(v))?3:v; }
   function setLayerMM(dep,mm){ state.layerMM[dep]=Math.max(0.5,Math.min(60,Number(mm)||3)); }
+
+  /* ---------------- Biblioteka materiałów ----------------
+     Gotowe pozycje (nazwa + grubość w mm) do szybkiego ustawienia grubości
+     warstwy 3D z listy #lyr-mat. Własne materiały dopisane przez użytkownika
+     trzymane są w localStorage i pojawiają się na końcu listy. */
+  const MATERIAL_PRESETS=[
+    {label:'Sklejka 3 mm', mm:3},
+    {label:'Sklejka 4 mm', mm:4},
+    {label:'Sklejka 6 mm', mm:6},
+    {label:'Sklejka 9 mm', mm:9},
+    {label:'Sklejka 12 mm', mm:12},
+    {label:'MDF 3 mm', mm:3},
+    {label:'MDF 6 mm', mm:6},
+    {label:'Pleksi (akryl) 3 mm', mm:3},
+    {label:'Pleksi (akryl) 5 mm', mm:5},
+    {label:'Pleksi (akryl) 8 mm', mm:8},
+    {label:'Tektura 2 mm', mm:2},
+    {label:'Tektura 3 mm', mm:3},
+    {label:'Filc 3 mm', mm:3},
+    {label:'Forex (PVC) 3 mm', mm:3}
+  ];
+  function loadCustomMaterials(){
+    try{ return JSON.parse(localStorage.getItem('laser_edytor_materials_v1')||'[]'); }catch(e){ return []; }
+  }
+  function saveCustomMaterials(list){
+    try{ localStorage.setItem('laser_edytor_materials_v1', JSON.stringify(list)); }catch(e){}
+  }
 
   const TOOLS=[
     {key:'select',label:'Wskaźnik',ico:'↖'},
@@ -3523,9 +3575,14 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       const hidden=state.hiddenDepths.includes(dep);
       const cnt=state.objects.filter(o=>(o.depth||1)===dep).length;
       const sel=selDepths.has(dep)?' on':'';
+      const matOptions=`<option value="">Materiał…</option>`
+        +MATERIAL_PRESETS.map(m=>`<option value="${m.mm}">${escapeXml(m.label)}</option>`).join('')
+        +(loadCustomMaterials().length?`<optgroup label="Własne">${loadCustomMaterials().map(m=>`<option value="${m.mm}">${escapeXml(m.label)}</option>`).join('')}</optgroup>`:'')
+        +`<option value="__manage__">⚙ Zarządzaj materiałami…</option>`;
       return `<div class="lyr-row${hidden?' lyr-hidden':''}${sel}" data-dep="${dep}">
         <button class="lyr-pick" data-pick="${dep}" style="background:${col}" title="Zaznacz wszystkie elementy warstwy ${dep}">W${dep}</button>
         <span class="lyr-cnt">${cnt} el.</span>
+        <select class="lyr-mat" data-mat="${dep}" title="Wybierz materiał z biblioteki">${matOptions}</select>
         <input class="lyr-mm" type="number" data-mm="${dep}" value="${fmt(layerMM(dep))}" min="0.5" step="0.5" title="Grubość materiału tej warstwy (mm)"><span class="lyr-unit">mm</span>
         <button class="lyr-eye" data-eye="${dep}" title="Pokaż / ukryj warstwę">${hidden?'🚫':'👁'}</button>
       </div>`;
@@ -3545,7 +3602,43 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       inp.addEventListener('change',()=>{ setLayerMM(dep,inp.value); inp.value=fmt(layerMM(dep)); scheduleLive3D(); pushHistory(); });
       inp.addEventListener('input',()=>{ setLayerMM(dep,inp.value); scheduleLive3D(); });
     });
+    dlEl.querySelectorAll('[data-mat]').forEach(sel=>{
+      const dep=Number(sel.dataset.mat);
+      sel.addEventListener('change',()=>{
+        const v=sel.value;
+        if(v==='__manage__'){ openMaterialsModal(); sel.value=''; return; }
+        if(v===''){ return; }
+        setLayerMM(dep,v);
+        renderDepthLegend(); scheduleLive3D(); pushHistory();
+      });
+    });
   }
+
+  /* ---------------- Modal: biblioteka materiałów ---------------- */
+  const modalMaterials=document.getElementById('modalMaterials');
+  function renderMaterialsList(){
+    const listEl=document.getElementById('matList');
+    const customs=loadCustomMaterials();
+    if(!customs.length){ listEl.innerHTML='<p class="mat-empty">Brak własnych materiałów. Dodaj pierwszy powyżej — pojawi się na liście „Materiał…” przy każdej warstwie.</p>'; return; }
+    listEl.innerHTML=customs.map((m,i)=>`<div class="mat-row" data-i="${i}"><span class="mat-label">${escapeXml(m.label)}</span><span class="lyr-unit">${fmt(m.mm)} mm</span><button type="button" class="mat-del" title="Usuń">🗑</button></div>`).join('');
+    listEl.querySelectorAll('.mat-del').forEach(btn=>btn.addEventListener('click',()=>{
+      const i=Number(btn.closest('.mat-row').dataset.i);
+      const list=loadCustomMaterials(); list.splice(i,1); saveCustomMaterials(list);
+      renderMaterialsList(); renderDepthLegend();
+    }));
+  }
+  function openMaterialsModal(){ renderMaterialsList(); modalMaterials.classList.add('open'); }
+  document.getElementById('matAddBtn').addEventListener('click',()=>{
+    const nameEl=document.getElementById('matName'), mmEl=document.getElementById('matMM');
+    const name=nameEl.value.trim(), mm=Number(mmEl.value);
+    if(!name || !Number.isFinite(mm) || mm<=0) return;
+    const list=loadCustomMaterials(); list.push({label:`${name} ${fmt(mm)} mm`, mm});
+    saveCustomMaterials(list);
+    nameEl.value=''; mmEl.value='';
+    renderMaterialsList(); renderDepthLegend();
+  });
+  document.getElementById('modalMaterialsClose').addEventListener('click',()=>modalMaterials.classList.remove('open'));
+  modalMaterials.addEventListener('click',e=>{ if(e.target===modalMaterials) modalMaterials.classList.remove('open'); });
 
   const depthViewBtn=document.getElementById('depthViewBtn');
   depthViewBtn.classList.toggle('active',state.depthView);
