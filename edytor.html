@@ -10,8 +10,8 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#15100a; --surface:#1f1810; --surface2:#291f13; --border:#3d2f1c;
-  --accent:#d8a14a; --accent-dark:#a8762c; --text:#ece2d0; --muted:#a8967c;
+  --bg:#0f0a06; --surface:#1c1208; --surface2:#261a0c; --border:#3d2a14;
+  --accent:#c8943a; --accent-dark:#8b5e2a; --text:#ede0c8; --muted:#a08060;
   --cut:#ff2d2d; --engrave:#1c1c1c; --score:#2f7bd8;
   --font-d:'Playfair Display',serif; --font-b:'Inter',system-ui,sans-serif; --r:9px;
 }
@@ -81,7 +81,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 .font-dd.open .font-dd-list{display:block}
 .font-dd-item{padding:7px 10px;cursor:pointer;font-size:1.02rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .font-dd-item:hover{background:var(--accent);color:#1a1308}
-.font-dd-item.cur{background:rgba(216,161,74,.18)}
+.font-dd-item.cur{background:rgba(200,148,58,.18)}
 .font-dd-item .pc{font-family:var(--font-b);font-size:.68rem;color:var(--muted)}
 .font-dd-item:hover .pc{color:#1a1308}
 
@@ -1121,7 +1121,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     const w=dl.text.length*fs*0.58+padX*2, h=fs+padY*2;
     const x=dl.x+fs*0.7, y=dl.y+fs*0.7;
     return `<g class="drag-label" style="pointer-events:none">
-      <rect x="${fmt(x)}" y="${fmt(y)}" width="${fmt(w)}" height="${fmt(h)}" rx="${fmt(fs*0.25)}" fill="#1c1c1cdd" stroke="#d8a14a" stroke-width="${fmt(Math.max(fs*0.04,0.05))}"/>
+      <rect x="${fmt(x)}" y="${fmt(y)}" width="${fmt(w)}" height="${fmt(h)}" rx="${fmt(fs*0.25)}" fill="#1c1c1cdd" stroke="#c8943a" stroke-width="${fmt(Math.max(fs*0.04,0.05))}"/>
       <text x="${fmt(x+w/2)}" y="${fmt(y+h/2+fs*0.32)}" text-anchor="middle" font-size="${fmt(fs)}" font-family="sans-serif" fill="#fff">${escapeXml(dl.text)}</text>
     </g>`;
   }
@@ -1163,7 +1163,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
         hs+=`<circle class="sel-handle" cx="${fmt(hx)}" cy="${fmt(hy)}" r="${fmt(hr)}" style="pointer-events:none"/>`;
         hs+=`<circle cx="${fmt(hx)}" cy="${fmt(hy)}" r="${fmt(hit)}" fill="transparent" data-mhandle="${k}"/>`;
       });
-      s=`<rect x="${fmt(minx)}" y="${fmt(miny)}" width="${fmt(maxx-minx)}" height="${fmt(maxy-miny)}" fill="none" stroke="#d8a14a" stroke-width="1.6px" vector-effect="non-scaling-stroke"/>`+s+hs+guideLinesMarkup()+dragLabelMarkup();
+      s=`<rect x="${fmt(minx)}" y="${fmt(miny)}" width="${fmt(maxx-minx)}" height="${fmt(maxy-miny)}" fill="none" stroke="#c8943a" stroke-width="1.6px" vector-effect="non-scaling-stroke"/>`+s+hs+guideLinesMarkup()+dragLabelMarkup();
       gOverlay.innerHTML=s; return;
     }
     const o=sel[0];
@@ -1942,9 +1942,9 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   function renderPenDraft(){
     const pts=state.penDraft; if(!pts){ gOverlay.innerHTML=''; return; }
     const hr=state.view.w*0.011; let s='';
-    if(pts.length>1) s+=`<polyline points="${pts.map(p=>fmt(p[0])+','+fmt(p[1])).join(' ')}" fill="none" stroke="#d8a14a" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`;
-    if(state.penPreview){ const last=pts[pts.length-1]; s+=`<line x1="${fmt(last[0])}" y1="${fmt(last[1])}" x2="${fmt(state.penPreview[0])}" y2="${fmt(state.penPreview[1])}" stroke="#d8a14a" stroke-width="1.1" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>`; }
-    pts.forEach((p,i)=>{ s+=`<circle cx="${fmt(p[0])}" cy="${fmt(p[1])}" r="${fmt(hr)}" fill="${i===0?'#fff':'#d8a14a'}" stroke="#d8a14a" stroke-width="1.3" vector-effect="non-scaling-stroke"/>`; });
+    if(pts.length>1) s+=`<polyline points="${pts.map(p=>fmt(p[0])+','+fmt(p[1])).join(' ')}" fill="none" stroke="#c8943a" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`;
+    if(state.penPreview){ const last=pts[pts.length-1]; s+=`<line x1="${fmt(last[0])}" y1="${fmt(last[1])}" x2="${fmt(state.penPreview[0])}" y2="${fmt(state.penPreview[1])}" stroke="#c8943a" stroke-width="1.1" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>`; }
+    pts.forEach((p,i)=>{ s+=`<circle cx="${fmt(p[0])}" cy="${fmt(p[1])}" r="${fmt(hr)}" fill="${i===0?'#fff':'#c8943a'}" stroke="#c8943a" stroke-width="1.3" vector-effect="non-scaling-stroke"/>`; });
     gOverlay.innerHTML=s;
   }
   // zamiana łamanej (zamkniętej) na gładką krzywą Catmulla-Roma -> Béziera
@@ -2268,7 +2268,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     } else if(drag.mode==='marquee'){
       const x=Math.min(drag.x0,docP.x), y=Math.min(drag.y0,docP.y), w=Math.abs(docP.x-drag.x0), h=Math.abs(docP.y-drag.y0);
       drag.rect={x,y,w,h};
-      gOverlay.innerHTML=`<rect x="${fmt(x)}" y="${fmt(y)}" width="${fmt(w)}" height="${fmt(h)}" fill="rgba(216,161,74,.12)" stroke="#d8a14a" stroke-width="1.2" vector-effect="non-scaling-stroke" stroke-dasharray="4 3"/>`;
+      gOverlay.innerHTML=`<rect x="${fmt(x)}" y="${fmt(y)}" width="${fmt(w)}" height="${fmt(h)}" fill="rgba(200,148,58,.12)" stroke="#c8943a" stroke-width="1.2" vector-effect="non-scaling-stroke" stroke-dasharray="4 3"/>`;
     } else if(drag.mode==='draw'){
       const o=drag.o; let x0=drag.ax,y0=drag.ay,x1=snap(docP.x),y1=snap(docP.y);
       if(o.type==='line'){ o.x=x0;o.y=y0;o.w=x1-x0;o.h=y1-y0; }
