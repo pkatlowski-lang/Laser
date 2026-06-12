@@ -982,7 +982,10 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   function renderOverlay(){
     if(state.penDraft){ renderPenDraft(); return; }              // tryb pióra: rysujemy szkic
     if(drag && drag.mode==='marquee') return;                   // marquee rysuje się sam
-    const sel=getSelected();
+    // ukryte obiekty (lub te z ukrytej głębi) nie mają geometrii w gObjects -
+    // pomijamy je tutaj, żeby po ukryciu zaznaczonego obiektu nie zostawały
+    // "zjawy": ramka i uchwyty zaznaczenia bez żadnego widocznego kształtu pod nimi
+    const sel=getSelected().filter(o=>o.visible && !(state.hiddenDepths.length && state.hiddenDepths.includes(o.depth||1)));
     if(state.editingPathId && (sel.length!==1 || sel[0].id!==state.editingPathId)) state.editingPathId=null;
     if(sel.length===0){ gOverlay.innerHTML=guideLinesMarkup(); return; }
     if(sel.length===1 && state.editingPathId===sel[0].id && isEditablePolygonPath(sel[0])){
