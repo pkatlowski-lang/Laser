@@ -6,14 +6,14 @@
 <title>Edytor projektów do lasera — interaktywny edytor parametryczny</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Dancing+Script:wght@600&family=Great+Vibes&family=Montserrat:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Dancing+Script:wght@600&family=Great+Vibes&family=Montserrat:wght@500;700&family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#0f0a06; --surface:#1c1208; --surface2:#261a0c; --border:#3d2a14;
-  --accent:#c8943a; --accent-dark:#8b5e2a; --text:#ede0c8; --muted:#a08060;
+  --bg:#020617; --surface:#0f172a; --surface2:#1e293b; --border:#334155;
+  --accent:#38bdf8; --accent-dark:#0284c7; --text:#f1f5f9; --muted:#94a3b8;
   --cut:#ff2d2d; --engrave:#1c1c1c; --score:#2f7bd8;
-  --font-d:'Playfair Display',serif; --font-b:'Inter',system-ui,sans-serif; --r:9px;
+  --font-d:'Poppins',system-ui,sans-serif; --font-b:'Poppins',system-ui,sans-serif; --r:9px;
 }
 html,body{height:100%}
 body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-height:1.45;overflow:hidden}
@@ -27,7 +27,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 .tgroup:last-child{border-right:none}
 .tbtn{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-width:38px;height:36px;padding:0 9px;border-radius:8px;border:1.5px solid var(--border);background:var(--surface2);color:var(--text);font-size:.8rem;font-weight:600;cursor:pointer;transition:.12s;white-space:nowrap}
 .tbtn:hover{border-color:var(--accent);color:var(--accent)}
-.tbtn.active{background:var(--accent);border-color:var(--accent);color:#1a1308}
+.tbtn.active{background:var(--accent);border-color:var(--accent);color:#04101e}
 .tbtn:disabled{opacity:.4;cursor:not-allowed}
 .tbtn .ico{font-size:1rem;line-height:1}
 .zoomval{min-width:50px;text-align:center;font-size:.8rem;color:var(--muted);font-weight:600}
@@ -70,7 +70,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 .text-toolbar input[type=number]{width:58px}
 .text-toolbar label{font-size:.7rem;color:var(--muted);font-weight:600;text-transform:uppercase}
 .text-toolbar .tbtn{height:30px;min-width:30px;padding:0 9px}
-.text-toolbar .tbtn.active{background:var(--accent);border-color:var(--accent);color:#1a1308}
+.text-toolbar .tbtn.active{background:var(--accent);border-color:var(--accent);color:#04101e}
 .tt-sep{width:1px;height:22px;background:var(--border)}
 
 /* ---- Rozwijana lista czcionek z podglądem na żywo (najechanie = podgląd, klik = wybór) ---- */
@@ -80,10 +80,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 .font-dd-list{display:none;position:absolute;left:0;right:0;top:calc(100% + 3px);z-index:1200;max-height:280px;overflow-y:auto;background:var(--surface2);border:1px solid var(--border);border-radius:8px;box-shadow:0 10px 28px rgba(0,0,0,.55)}
 .font-dd.open .font-dd-list{display:block}
 .font-dd-item{padding:7px 10px;cursor:pointer;font-size:1.02rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.font-dd-item:hover{background:var(--accent);color:#1a1308}
-.font-dd-item.cur{background:rgba(200,148,58,.18)}
+.font-dd-item:hover{background:var(--accent);color:#04101e}
+.font-dd-item.cur{background:rgba(56,189,248,.18)}
 .font-dd-item .pc{font-family:var(--font-b);font-size:.68rem;color:var(--muted)}
-.font-dd-item:hover .pc{color:#1a1308}
+.font-dd-item:hover .pc{color:#04101e}
 
 /* canvas geometry styling */
 .doc-bg{fill:#e8d9b8}
@@ -132,7 +132,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 .range-val{font-weight:700;color:var(--accent);min-width:40px;text-align:right;font-size:.82rem}
 .seg{display:flex;gap:4px}
 .seg button{flex:1;padding:8px 4px;border-radius:6px;border:1.5px solid var(--border);background:var(--surface2);color:var(--muted);font-size:.74rem;font-weight:600;cursor:pointer}
-.seg button.on{border-color:var(--accent);color:#1a1308;background:var(--accent)}
+.seg button.on{border-color:var(--accent);color:#04101e;background:var(--accent)}
 .seg button.cut.on{background:var(--cut);border-color:var(--cut);color:#fff}
 .seg button.engrave.on{background:var(--engrave);border-color:var(--engrave);color:#fff}
 .seg button.score.on{background:var(--score);border-color:var(--score);color:#fff}
@@ -198,8 +198,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-heigh
 .ctx-menu{display:none;position:fixed;z-index:3000;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:5px;min-width:208px;box-shadow:0 10px 30px rgba(0,0,0,.5);font-size:.82rem}
 .ctx-menu.open{display:block}
 .ctx-menu button{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;padding:7px 10px;background:none;border:none;color:var(--text);text-align:left;border-radius:6px;cursor:pointer;font:inherit}
-.ctx-menu button:hover:not(:disabled){background:var(--accent);color:#1a1308}
-.ctx-menu button:hover:not(:disabled) .ctx-key{color:#1a1308;opacity:.7}
+.ctx-menu button:hover:not(:disabled){background:var(--accent);color:#04101e}
+.ctx-menu button:hover:not(:disabled) .ctx-key{color:#04101e;opacity:.7}
 .ctx-menu button:disabled{opacity:.4;cursor:not-allowed}
 .ctx-menu .ctx-key{font-size:.7rem;color:var(--muted)}
 .ctx-menu hr{border:none;border-top:1px solid var(--border);margin:4px 2px}
@@ -363,7 +363,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       <button class="tbtn" id="boxGenBtn" title="Generator pudełka — parametryczne pudełko z łączeniami „na palec”, gotowe do wycięcia laserem">📦 Generator pudełka</button>
       <button class="tbtn" id="hingeGenBtn" title="Generator zawiasu — wzór nacięć (living hinge), który pozwala wygiąć sztywny materiał">🪗 Zawias żywy</button>
       <button class="tbtn" id="gearGenBtn" title="Generator koła zębatego — parametryczne koło zębatego (ewolwentowe) z otworem na oś, gotowe do wycięcia laserem">⚙ Koło zębate</button>
-      <button class="tbtn" id="exportBtn" style="background:linear-gradient(135deg,var(--accent),var(--accent-dark));border-color:var(--accent);color:#1a1308">⬇ Pobierz SVG</button>
+      <button class="tbtn" id="exportBtn" style="background:linear-gradient(135deg,var(--accent),var(--accent-dark));border-color:var(--accent);color:#04101e">⬇ Pobierz SVG</button>
       <button class="tbtn" id="exportDxfBtn" title="Eksportuj projekt jako plik DXF (do programów CNC/laser, np. LightBurn, AutoCAD)">⬇ Pobierz DXF</button>
       <button class="tbtn" id="export3dBtn" title="Eksport 3D — pobierz osobne SVG dla każdej warstwy głębokości i sklejaj je, by uzyskać efekt 3D">🧊 Eksport 3D</button>
     </div>
@@ -497,7 +497,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     <p style="font-size:.8rem;color:var(--muted);margin:0">Każda warstwa ma osobną kolumnę — wspólne elementy są scalone w jeden obrys gotowy do wycięcia.</p>
     <div class="svgprev-wrap" id="svgPrevWrap"></div>
     <div class="field" style="padding:14px 0 0;display:flex;justify-content:flex-end">
-      <button type="button" class="tbtn" id="svgPrevDownload" style="background:linear-gradient(135deg,var(--accent),var(--accent-dark));border-color:var(--accent);color:#1a1308">⬇ Pobierz SVG warstw</button>
+      <button type="button" class="tbtn" id="svgPrevDownload" style="background:linear-gradient(135deg,var(--accent),var(--accent-dark));border-color:var(--accent);color:#04101e">⬇ Pobierz SVG warstw</button>
     </div>
   </div>
 </div>
@@ -1121,7 +1121,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     const w=dl.text.length*fs*0.58+padX*2, h=fs+padY*2;
     const x=dl.x+fs*0.7, y=dl.y+fs*0.7;
     return `<g class="drag-label" style="pointer-events:none">
-      <rect x="${fmt(x)}" y="${fmt(y)}" width="${fmt(w)}" height="${fmt(h)}" rx="${fmt(fs*0.25)}" fill="#1c1c1cdd" stroke="#c8943a" stroke-width="${fmt(Math.max(fs*0.04,0.05))}"/>
+      <rect x="${fmt(x)}" y="${fmt(y)}" width="${fmt(w)}" height="${fmt(h)}" rx="${fmt(fs*0.25)}" fill="#1c1c1cdd" stroke="#38bdf8" stroke-width="${fmt(Math.max(fs*0.04,0.05))}"/>
       <text x="${fmt(x+w/2)}" y="${fmt(y+h/2+fs*0.32)}" text-anchor="middle" font-size="${fmt(fs)}" font-family="sans-serif" fill="#fff">${escapeXml(dl.text)}</text>
     </g>`;
   }
@@ -1163,7 +1163,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
         hs+=`<circle class="sel-handle" cx="${fmt(hx)}" cy="${fmt(hy)}" r="${fmt(hr)}" style="pointer-events:none"/>`;
         hs+=`<circle cx="${fmt(hx)}" cy="${fmt(hy)}" r="${fmt(hit)}" fill="transparent" data-mhandle="${k}"/>`;
       });
-      s=`<rect x="${fmt(minx)}" y="${fmt(miny)}" width="${fmt(maxx-minx)}" height="${fmt(maxy-miny)}" fill="none" stroke="#c8943a" stroke-width="1.6px" vector-effect="non-scaling-stroke"/>`+s+hs+guideLinesMarkup()+dragLabelMarkup();
+      s=`<rect x="${fmt(minx)}" y="${fmt(miny)}" width="${fmt(maxx-minx)}" height="${fmt(maxy-miny)}" fill="none" stroke="#38bdf8" stroke-width="1.6px" vector-effect="non-scaling-stroke"/>`+s+hs+guideLinesMarkup()+dragLabelMarkup();
       gOverlay.innerHTML=s; return;
     }
     const o=sel[0];
@@ -1942,9 +1942,9 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   function renderPenDraft(){
     const pts=state.penDraft; if(!pts){ gOverlay.innerHTML=''; return; }
     const hr=state.view.w*0.011; let s='';
-    if(pts.length>1) s+=`<polyline points="${pts.map(p=>fmt(p[0])+','+fmt(p[1])).join(' ')}" fill="none" stroke="#c8943a" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`;
-    if(state.penPreview){ const last=pts[pts.length-1]; s+=`<line x1="${fmt(last[0])}" y1="${fmt(last[1])}" x2="${fmt(state.penPreview[0])}" y2="${fmt(state.penPreview[1])}" stroke="#c8943a" stroke-width="1.1" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>`; }
-    pts.forEach((p,i)=>{ s+=`<circle cx="${fmt(p[0])}" cy="${fmt(p[1])}" r="${fmt(hr)}" fill="${i===0?'#fff':'#c8943a'}" stroke="#c8943a" stroke-width="1.3" vector-effect="non-scaling-stroke"/>`; });
+    if(pts.length>1) s+=`<polyline points="${pts.map(p=>fmt(p[0])+','+fmt(p[1])).join(' ')}" fill="none" stroke="#38bdf8" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`;
+    if(state.penPreview){ const last=pts[pts.length-1]; s+=`<line x1="${fmt(last[0])}" y1="${fmt(last[1])}" x2="${fmt(state.penPreview[0])}" y2="${fmt(state.penPreview[1])}" stroke="#38bdf8" stroke-width="1.1" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>`; }
+    pts.forEach((p,i)=>{ s+=`<circle cx="${fmt(p[0])}" cy="${fmt(p[1])}" r="${fmt(hr)}" fill="${i===0?'#fff':'#38bdf8'}" stroke="#38bdf8" stroke-width="1.3" vector-effect="non-scaling-stroke"/>`; });
     gOverlay.innerHTML=s;
   }
   // zamiana łamanej (zamkniętej) na gładką krzywą Catmulla-Roma -> Béziera
@@ -2268,7 +2268,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
     } else if(drag.mode==='marquee'){
       const x=Math.min(drag.x0,docP.x), y=Math.min(drag.y0,docP.y), w=Math.abs(docP.x-drag.x0), h=Math.abs(docP.y-drag.y0);
       drag.rect={x,y,w,h};
-      gOverlay.innerHTML=`<rect x="${fmt(x)}" y="${fmt(y)}" width="${fmt(w)}" height="${fmt(h)}" fill="rgba(200,148,58,.12)" stroke="#c8943a" stroke-width="1.2" vector-effect="non-scaling-stroke" stroke-dasharray="4 3"/>`;
+      gOverlay.innerHTML=`<rect x="${fmt(x)}" y="${fmt(y)}" width="${fmt(w)}" height="${fmt(h)}" fill="rgba(56,189,248,.12)" stroke="#38bdf8" stroke-width="1.2" vector-effect="non-scaling-stroke" stroke-dasharray="4 3"/>`;
     } else if(drag.mode==='draw'){
       const o=drag.o; let x0=drag.ax,y0=drag.ay,x1=snap(docP.x),y1=snap(docP.y);
       if(o.type==='line'){ o.x=x0;o.y=y0;o.w=x1-x0;o.h=y1-y0; }
