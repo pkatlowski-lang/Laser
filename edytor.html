@@ -1537,6 +1537,55 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   }
   function polyCentroid(poly){ let x=0,y=0; for(const p of poly){ x+=p[0]; y+=p[1]; } return [x/poly.length, y/poly.length]; }
   function polyToPathD(poly){ return poly.map((p,i)=>(i?'L':'M')+fmt(p[0])+' '+fmt(p[1])).join('')+'Z'; }
+  // Wygładzony obrys do FINALNEGO renderu (eksport SVG, podgląd 3D): te same wierzchołki
+  // co polyToPathD, ale odcinki między "gładkimi" wierzchołkami (gdzie kąt skrętu jest
+  // mały) zamieniane są na krzywe Béziera (styczne Catmull-Rom) - usuwa to "schodkowy",
+  // wielokątny wygląd śledzonych konturów (np. zaokrąglone litery "o","s","m" z
+  // wektoryzacji tekstu) na krzywiznach. Ostre narożniki (prostokąty, gwiazdy, zęby
+  // zębatki, litery z kantami) mają kąt skrętu >= cornerDeg i zostają proste (L) -
+  // bez zaokrąglania kątów, których nie powinno być.
+  // Pierścienie z wektoryzacji tekstu (oznaczone __textSmooth w mergeLayerRings) mają
+  // znacznie "grubsze" kąty skrętu między kolejnymi punktami niż gładkie krzywe innych
+  // kształtów (elipsa, zaokrąglony narożnik) - ślad śledzenia konturu po pikselach raster
+  // (kąty ~26-45° to NORMALNA krzywizna litery, nie narożnik). Dlatego dla tekstu używamy
+  // wyższego progu "narożnika" niż domyślny - inaczej litery wyszłyby bez wygładzenia.
+  function ringSmoothD(ring){ return polyToSmoothPathD(ring, ring.__textSmooth?50:22); }
+  function polyToSmoothPathD(poly, cornerDeg=22){
+    const n=poly.length;
+    if(n<5) return polyToPathD(poly);
+    const turn=i=>{
+      const p0=poly[(i-1+n)%n], p1=poly[i], p2=poly[(i+1)%n];
+      const a1=Math.atan2(p1[1]-p0[1],p1[0]-p0[0]), a2=Math.atan2(p2[1]-p1[1],p2[0]-p1[0]);
+      let d=Math.abs(a2-a1)*180/Math.PI; if(d>180) d=360-d; return d;
+    };
+    const corner=poly.map((_,i)=>turn(i)>=cornerDeg);
+    let d=`M${fmt(poly[0][0])} ${fmt(poly[0][1])}`;
+    for(let i=0;i<n;i++){
+      const p1=poly[i], p2=poly[(i+1)%n];
+      if(corner[i]||corner[(i+1)%n]){
+        // ostatni odcinek zamykający (poly[n-1]->poly[0]), jeśli prosty, jest już
+        // domknięty przez "Z" - pomijamy, żeby nie dublować punktu startowego
+        if(i<n-1) d+=`L${fmt(p2[0])} ${fmt(p2[1])}`;
+      }else{
+        const p0=poly[(i-1+n)%n], p3=poly[(i+2)%n];
+        // Ogranicz długość wektorów stycznych Catmull-Rom do połowy długości
+        // aktualnego odcinka p1->p2 - bez tego punkty leżące blisko siebie, ale
+        // z bardzo długimi odcinkami sąsiednimi (np. wąski "dziobek" na styku
+        // ramion litery "X"), dają sterowanie krzywej dalece poza odcinek i
+        // tworzą pętlę/"bąbelek" w wyniku.
+        const segLen=Math.hypot(p2[0]-p1[0], p2[1]-p1[1]);
+        const maxOff=segLen*0.5;
+        let v1x=(p2[0]-p0[0])/6, v1y=(p2[1]-p0[1])/6;
+        let v2x=(p3[0]-p1[0])/6, v2y=(p3[1]-p1[1])/6;
+        const l1=Math.hypot(v1x,v1y); if(l1>maxOff && l1>0){ const s=maxOff/l1; v1x*=s; v1y*=s; }
+        const l2=Math.hypot(v2x,v2y); if(l2>maxOff && l2>0){ const s=maxOff/l2; v2x*=s; v2y*=s; }
+        const c1x=p1[0]+v1x, c1y=p1[1]+v1y;
+        const c2x=p2[0]-v2x, c2y=p2[1]-v2y;
+        d+=`C${fmt(c1x)} ${fmt(c1y)} ${fmt(c2x)} ${fmt(c2y)} ${fmt(p2[0])} ${fmt(p2[1])}`;
+      }
+    }
+    return d+'Z';
+  }
   function polysBBoxMulti(polys){ let a={minx:Infinity,miny:Infinity,maxx:-Infinity,maxy:-Infinity};
     polys.forEach(pl=>pl.forEach(p=>{ a.minx=Math.min(a.minx,p[0]); a.miny=Math.min(a.miny,p[1]); a.maxx=Math.max(a.maxx,p[0]); a.maxy=Math.max(a.maxy,p[1]); })); return a; }
   function pointInPoly(pt, poly){ let inside=false; const x=pt[0],y=pt[1];
@@ -3400,7 +3449,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
         }
       });
       // ---- góra płyty: jeden scalony kształt (bez szwów) + ewentualne elementy nie-geometryczne (tekst) ----
-      const topPath=rings.length?`<path d="${rings.map(polyToPathD).join(' ')}" fill="${col}" fill-rule="evenodd" stroke="${col}" stroke-width="0.6"/>`:'';
+      const topPath=rings.length?`<path d="${rings.map(ringSmoothD).join(' ')}" fill="${col}" fill-rule="evenodd" stroke="${col}" stroke-width="0.6"/>`:'';
       _silFill=col;
       const topOther=otherObjs.map(o=>objMarkup(o,false)).join('');
       _silFill=null;
@@ -3661,7 +3710,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
         const isHole=meta.some(o2=>o2!==r && o2.area>r.area && pointInPoly(r.c,o2.pts));
         (isHole?holes:shells).push(r.pts);
       });
-      if(shells.length) fillGroups.push({shells,holes});
+      if(shells.length) fillGroups.push({shells,holes,text:o.type==='text'});
     });
     if(!fillGroups.length) return lineRings;
     // Grupowanie metodą "union-find" wg nakładania się obwiedni (bbox): rasteryzujemy
@@ -3684,7 +3733,14 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       const fg=groupItems.filter(it=>it.fill).map(it=>it.fill);
       const hc=groupItems.filter(it=>it.hole).map(it=>it.hole);
       if(!fg.length) return; // dziura bez materiału pod spodem - nie ma czego wycinać
-      if(fg.length===1 && !hc.length){ fg[0].shells.forEach(s=>result.push(s)); fg[0].holes.forEach(h=>result.push(h)); return; }
+      if(fg.length===1 && !hc.length){
+        // Nieprzecięty obrys pojedynczego obiektu - zachowuje dokładne wierzchołki wektorowe
+        // (bez rasteryzacji). Dla tekstu oznaczamy te pierścienie jako "do wygładzenia"
+        // (patrz polyToSmoothPathD) - usuwa "schodkowy" wygląd śledzonych konturów liter
+        // bez ryzyka zaokrąglenia ostrych narożników innych kształtów (gwiazdy, zębatki...).
+        if(fg[0].text){ fg[0].shells.forEach(s=>{s.__textSmooth=true;}); fg[0].holes.forEach(h=>{h.__textSmooth=true;}); }
+        fg[0].shells.forEach(s=>result.push(s)); fg[0].holes.forEach(h=>result.push(h)); return;
+      }
       rasterMergeRings(fg,hc).forEach(r=>result.push(r));
     });
     return result;
@@ -3704,12 +3760,12 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       // bo wszystko co leży na/nad tą płytą wymaga pełnego materiału pod sobą
       const cutObjs=vis.filter(o=>(o.depth||1)>=dep && (o.type==='text' || o.role==='hole' || (BOOL_TYPES.includes(o.type) && o.mode!=='engrave')));
       const rings=mergeLayerRings(cutObjs, dep);
-      const cutPaths=rings.map(r=>`<path d="${polyToPathD(r)}" fill="none" stroke="${COLORS.cut}" stroke-width="0.3"/>`).join('');
+      const cutPaths=rings.map(r=>`<path d="${ringSmoothD(r)}" fill="none" stroke="${COLORS.cut}" stroke-width="0.3"/>`).join('');
       // tekst tej warstwy w trybie "grawer" — wypełniona zwektoryzowana sylwetka liter (do grawerowania).
       // Kontur do CIĘCIA liter jest już częścią cutPaths (cutObjs zawiera cały tekst niezależnie od trybu).
       const textEngrave=vis.filter(o=>o.type==='text' && (o.depth||1)===dep && o.mode==='engrave')
         .map(o=>{ const polys=objSubPolysRepeated(o);
-          return polys.length ? `<path d="${polys.map(polyToPathD).join(' ')}" fill="${COLORS.engrave}" fill-rule="evenodd"/>` : objMarkup({...o,mode:'cut'},true); }).join('');
+          return polys.length ? `<path d="${polys.map(p=>polyToSmoothPathD(p,50)).join(' ')}" fill="${COLORS.engrave}" fill-rule="evenodd"/>` : objMarkup({...o,mode:'cut'},true); }).join('');
       // dekoracje (grawer) kształtów z tej warstwy — rysowane na wierzchu obrysu cięcia
       const deco=vis.filter(o=>(o.depth||1)===dep && o.mode==='engrave' && o.type!=='text' && o.role!=='hole').map(o=>objMarkup(o,true)).join('');
       groups+=`<g class="warstwa-${dep}" data-warstwa="${dep}" transform="translate(${fmt(ox)} ${labelH})">`+
@@ -3744,7 +3800,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       body+=layer.filter(o=>o.mode==='engrave' && o.type!=='text' && o.role!=='hole').map(o=>objMarkup(o,true)).join('');
       body+=layer.filter(o=>o.type==='text' && o.mode==='engrave').map(o=>{
         const polys=objSubPolysRepeated(o);
-        return polys.length ? `<path d="${polys.map(polyToPathD).join(' ')}" fill="${COLORS.engrave}" fill-rule="evenodd"/>` : objMarkup({...o,mode:'cut'},true);
+        return polys.length ? `<path d="${polys.map(p=>polyToSmoothPathD(p,50)).join(' ')}" fill="${COLORS.engrave}" fill-rule="evenodd"/>` : objMarkup({...o,mode:'cut'},true);
       }).join('');
       // cięcie i nacięcie: kontury (w tym tekst, zawsze wektoryzowany) tej samej warstwy
       // i trybu są scalane w jeden obrys bez wewnętrznych linii na wspólnych krawędziach;
@@ -3756,7 +3812,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
         if(!objs.length) return;
         if(mode==='cut') holesUsed=true;
         const rings=mergeLayerRings(mode==='cut'?[...objs,...holes]:objs, dep);
-        body+=rings.map(r=>`<path d="${polyToPathD(r)}" fill="none" stroke="${col}" stroke-width="0.12"${dash}/>`).join('');
+        body+=rings.map(r=>`<path d="${ringSmoothD(r)}" fill="none" stroke="${col}" stroke-width="0.12"${dash}/>`).join('');
       });
       // otwory bez żadnego materiału cięcia w tej warstwie (skrajny przypadek) — rysujemy
       // je niezależnie, jak dotychczas, przerywaną fioletową linią
@@ -4271,7 +4327,7 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
   document.fonts.ready.then(()=>{ _textOutlineCache.clear(); renderAll(); });
 
   // Hak debugowy do testów (Playwright) — bez wpływu na działanie edytora
-  window.__lzr={state, buildSeparatedSVG, buildLayerScene, mergeLayerRings, unionAll, objSubPolys, objSubPolysLocal, objSubPolysRepeated, textOutlinePolys, objBBox, rotatedBBox, selBBox, polyArea, polysBBoxMulti, polyToPathD, renderAll, updateLive3D, renderProps, select, defaultsFor, zoomFit, repeatTransforms, exportSVG, buildGearPoints, simplifyRing, rasterizeTextOutlines, textNaturalBox, getTextRaster};
+  window.__lzr={state, buildSeparatedSVG, buildLayerScene, mergeLayerRings, unionAll, objSubPolys, objSubPolysLocal, objSubPolysRepeated, textOutlinePolys, objBBox, rotatedBBox, selBBox, polyArea, polysBBoxMulti, polyToPathD, polyToSmoothPathD, renderAll, updateLive3D, renderProps, select, defaultsFor, zoomFit, repeatTransforms, exportSVG, buildGearPoints, simplifyRing, rasterizeTextOutlines, textNaturalBox, getTextRaster};
 })();
 </script>
 </body>
