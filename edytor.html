@@ -2480,6 +2480,14 @@ kbd{display:inline-block;min-width:20px;text-align:center;padding:2px 6px;backgr
       inp.addEventListener(ev, ()=>{
         let val=inp.value; if(isNum) val=Number(val);
         if(path==='repeat.type'){ o.repeat=normalizeRepeat(val,o.repeat); renderProps(); renderObjects(); renderOverlay(); if(inp.type!=='range') pushHistory(); return; }
+        // szerokość/wysokość nie mogą spaść do zera/ujemnej - pole ma min="1",
+        // ale wpisanie 0/"-5"/"" w zdarzeniu change nie jest przez przeglądarkę
+        // blokowane, więc dopilnowujemy tego tutaj (inaczej np. rx mogłoby
+        // przyjąć ujemną wartość przy min(w,h)/2 < 0). Linia jest wyjątkiem -
+        // jej w/h to wektor kierunku i mogą być ujemne (np. ukos w lewo/góra).
+        if((path==='w'||path==='h') && o.type!=='line' && inp.min!=='' && !(val>=Number(inp.min))){
+          val=Number(inp.min); inp.value=fmt(val);
+        }
         const oldW=o.w, oldH=o.h;
         setProp(o,path,val);
         if(o.lockRatio && (path==='w'||path==='h') && oldW>0 && oldH>0){
